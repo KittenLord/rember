@@ -9,48 +9,6 @@
 #include <string.h>
 #include <sys/ioctl.h>
 
-typedef int cint;
-typedef struct {
-    union {
-        struct {
-            cint x;
-            cint y;
-        };
-        struct {
-            cint w;
-            cint h;
-        };
-        struct {
-            cint width;
-            cint height;
-        };
-        struct {
-            cint col;
-            cint row;
-        };
-    };
-} v2;
-#define _v2(_x, _y) ((v2){ .x = _x, .y = _y, })
-#define v20 _v2(0, 0)
-
-v2 v2add(v2 a, v2 b) {
-    return _v2(a.x + b.x, a.y + b.y);
-}
-
-int writeTerm(char *thing) {
-    write(STDOUT_FILENO, thing, strlen(thing));
-}
-
-void setCursor(v2 p) {
-    printf("\e[%d;%dH", p.row + 1, p.col + 1);
-}
-
-v2 getScreenRes() {
-    struct winsize w;
-    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-    return _v2(w.ws_col, w.ws_row);
-}
-
 void ctob(char c, char buf[8]) {
     for(int i = 0; i < 8; i++) { buf[i] = ((c >> (8 - i - 1)) & 1) + '0'; }
 }
@@ -156,7 +114,7 @@ int getAmountOfDoneChildren(PlanItem *item) {
 #define STYLE_VISUAL_SELECTED "87"
 
 int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, bool visual, int vStart, int vEnd, bool init) {
-    if(init) { writeTerm("\e[2J"); setCursor(v20); if(item->children) renderPlanItem(item->children, 0, 0, selectedIndex, visual, vStart, vEnd, false); return 0; }
+    if(init) { printf("\e[2J"); printf("\e[H"); if(item->children) renderPlanItem(item->children, 0, 0, selectedIndex, visual, vStart, vEnd, false); return 0; }
 
     for(int i = 0; i < indent; i++) putchar(' ');
 
@@ -187,9 +145,9 @@ int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, boo
 
     write(STDOUT_FILENO, item->text, item->len);
 
-    writeTerm("\e[0m");
+    printf("\e[0m");
 
-    writeTerm("\e[1E"); // new line
+    printf("\e[1E"); // new line
 
     if(item->children && !item->collapsed) { index = renderPlanItem(item->children, indent + 4, index + 1, selectedIndex, visual, vStart, vEnd, false); }
     if(item->next) { index = renderPlanItem(item->next, indent, index + 1, selectedIndex, visual, vStart, vEnd, false); }
@@ -286,8 +244,8 @@ int main(int argc, char **argv) {
     tcsetattr(STDIN_FILENO, TCSANOW, &term);
     setbuf(stdout, NULL);
 
-    writeTerm("\e[?1049h"); // save previous screen
-    writeTerm("\e[?25l"); // make cursor invisible
+    printf("\e[?1049h"); // save previous screen
+    printf("\e[?25l"); // make cursor invisible
 
     FILE *logfile = fopen("./log.txt", "w+");
     FILE *savefile = fopen("./planner.txt", "r+");
@@ -497,7 +455,7 @@ int main(int argc, char **argv) {
 
     fclose(logfile);
 
-    writeTerm("\e[?1049l"); // restore screen
+    printf("\e[?1049l"); // restore screen
     tcsetattr(STDIN_FILENO, TCSANOW, &restore);
     return 0;
 }
