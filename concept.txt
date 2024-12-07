@@ -1,0 +1,23 @@
+a small tui planner, that'll look something like this
+
+- [2/4] thing a
+    - [ ] task 1
+    - [x] task 2
+    - [1/2] task 3
+        - [x] subtask 1
+        - [ ] subtask 2
+    - [x] task 4
+
+
+keybinds:
+
+o - new task of the same hierarchy level
+a - new child task
+c - change name of the task
+d - delete task
+Enter - tick/untick task
+Tab - collapse/reveal task
+
+ideas:
+
+possibly multiple tabs, opened on 1 2 3 etc
