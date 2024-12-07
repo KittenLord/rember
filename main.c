@@ -70,6 +70,7 @@ typedef struct PlanItem {
 };
 
 void freePlanItem(PlanItem *item, bool freeNext) {
+    if(!item) return;
     if(freeNext) freePlanItem(item->next, freeNext);
     freePlanItem(item->children, true);
     free(item);
@@ -151,43 +152,47 @@ int getAmountOfDoneChildren(PlanItem *item) {
 #define STYLE_PARTIAL "221"
 #define STYLE_DONE "34"
 #define STYLE_NOTDONE "255"
+#define STYLE_VISUAL "75"
+#define STYLE_VISUAL_SELECTED "87"
 
-int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, bool init) {
-    if(init) { writeTerm("\e[2J"); setCursor(v20); if(item->children) renderPlanItem(item->children, 0, 0, selectedIndex, false); return 0; }
+int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, bool visual, int vStart, int vEnd, bool init) {
+    if(init) { writeTerm("\e[2J"); setCursor(v20); if(item->children) renderPlanItem(item->children, 0, 0, selectedIndex, visual, vStart, vEnd, false); return 0; }
 
     for(int i = 0; i < indent; i++) putchar(' ');
-
 
     char *color = STYLE_NOTDONE;
     int dc = getAmountOfDoneChildren(item);
     if(isDone(item)) color = STYLE_DONE;
     else if(dc > 0) color = STYLE_PARTIAL;
     if(item->collapsed) color = STYLE_COLLAPSED;
+    bool isVisualSelected = visual && index >= vStart && index <= vEnd;
+    if(isVisualSelected) color = STYLE_VISUAL;
+    if(isVisualSelected && index == selectedIndex) color = STYLE_VISUAL_SELECTED;
 
-    if(index == selectedIndex) { printf("\e[48;5;%sm", color); printf("\e[38;5;0m"); }
+    if(index == selectedIndex || isVisualSelected) { printf("\e[48;5;%sm", color); printf("\e[38;5;0m"); }
     else { printf("\e[38;5;%sm", color); }
+
+    char collapsedChar = item->collapsed ? '+' : '-';
 
     if(item->children) {
         int children = getAmountOfChildren(item);
         int doneChildren = getAmountOfDoneChildren(item);
 
-        printf("- [%d/%d] ", doneChildren, children);
+        printf("%c [%d/%d] ", collapsedChar, doneChildren, children);
     }
     else {
         char x = item->done ? 'x' : ' ';
-        printf("- [%c] ", x);
+        printf("%c [%c] ", collapsedChar, x);
     }
 
     write(STDOUT_FILENO, item->text, item->len);
 
-    if(index == selectedIndex) {
-        writeTerm("\e[0m");
-    }
+    writeTerm("\e[0m");
 
     writeTerm("\e[1E"); // new line
 
-    if(item->children && !item->collapsed) { index = renderPlanItem(item->children, indent + 4, index + 1, selectedIndex, false); }
-    if(item->next) { index = renderPlanItem(item->next, indent, index + 1, selectedIndex, false); }
+    if(item->children && !item->collapsed) { index = renderPlanItem(item->children, indent + 4, index + 1, selectedIndex, visual, vStart, vEnd, false); }
+    if(item->next) { index = renderPlanItem(item->next, indent, index + 1, selectedIndex, visual, vStart, vEnd, false); }
     return index;
 }
 
@@ -235,6 +240,44 @@ int getPlanItemIndex(PlanItem *root, PlanItem *target) {
     return result;
 }
 
+PlanItem *__getPreviousItemVisual(PlanItem *current, PlanItem *targetNext) {
+    if(!current) return NULL;
+    if(current->children == targetNext) return current;
+    if(current->next == targetNext) return current;
+    PlanItem *next = NULL;
+    if(current->children) next = __getPreviousItemVisual(current->children, targetNext);
+    if(next) return next;
+    if(current->next) next = __getPreviousItemVisual(current->next, targetNext);
+    return next;
+}
+
+PlanItem *getPreviousItemVisual(PlanItem *root, PlanItem *targetNext) {
+    return __getPreviousItemVisual(root->children, targetNext);
+}
+
+PlanItem *removeSelection(PlanItem *root, int vStart, int vEnd) {
+    PlanItem *item = getPlanItemAtIndex(root, vStart);
+    PlanItem *search = item;
+
+    PlanItem *parent = getPreviousItemVisual(root, item);
+
+    PlanItem *replace = NULL;
+    while(search->next) {
+        int nextIndex = getPlanItemIndex(root, search->next);
+        if(nextIndex > vEnd) { replace = search->next; search->next = NULL; break; }
+        search = search->next;
+    }
+
+    if(parent->next == item) { parent->next = replace; }
+    else if(parent->children == item) { parent->children = replace; }
+    return item;
+}
+
+PlanItem *getLastSameNest(PlanItem *item) {
+    if(!item->next) return item;
+    return getLastSameNest(item->next);
+}
+
 int main(int argc, char **argv) {
     struct termios term, restore;
     tcgetattr(STDIN_FILENO, &term);
@@ -271,26 +314,42 @@ int main(int argc, char **argv) {
         root->len = ROOT_LEN;
         root->capacity = ROOT_LEN; // not necessary
         memcpy(root->text, ROOT_NAME, ROOT_LEN);
+        writePlanItem(root, savefile);
     }
 
     fclose(savefile);
-    savefile = fopen("./planner.txt", "w+");
 
     PlanItem *selected = root;
     int selectedIndex = 0;
 
+    PlanItem *copyBuffer = NULL;
+
     char input;
     char buf[8];
 
+    int visualSelectionStart = -1;
+    int visualSelectionEnd = -1;
+
     #define NORMAL_MODE 0
     #define INSERT_MODE 1
+    #define VISUAL_MODE 2
 
     int mode = NORMAL_MODE;
 
-    while(true) { 
-        renderPlanItem(root, 0, 0, selectedIndex, true);
+    bool doSave = true;
 
-        read(STDIN_FILENO, &input, 1);
+    char *simulatedInput = "";
+    size_t simulatedInputLen = 0;
+
+    while(true) { 
+        renderPlanItem(root, 0, 0, selectedIndex, mode == VISUAL_MODE, visualSelectionStart, visualSelectionEnd, true);
+
+        if(simulatedInputLen == 0) read(STDIN_FILENO, &input, 1);
+        else {
+            input = *simulatedInput;
+            simulatedInput++;
+            simulatedInputLen--;
+        }
 
         ctob(input, buf);
         fwrite(buf, sizeof(char), 8, logfile);
@@ -298,6 +357,7 @@ int main(int argc, char **argv) {
 
         if(mode == NORMAL_MODE) {
             if(input == 'q') break;
+            if(input == 'Q') { doSave = false; break; }
             if(input == 'o' && selected == root) input = 'a';
             if(input == 'a') {
                 PlanItem *child = calloc(1, sizeof(PlanItem));
@@ -336,8 +396,35 @@ int main(int argc, char **argv) {
                 selected->len = 0;
                 mode = INSERT_MODE;
             }
+            // this is actually identical to "vd", wonder if I can do something about it...
             if(input == 'd') {
-                // deletion is actually not that trivial without a doubly-linked list
+                simulatedInput = "vd";
+                simulatedInputLen = 2;
+            }
+            if(input == 'w') {
+                savefile = fopen("./planner.txt", "w+");
+                writePlanItem(root, savefile);
+                fclose(savefile);
+            }
+            if(input == 'v') {
+                mode = VISUAL_MODE;
+                visualSelectionStart = selectedIndex;
+                visualSelectionEnd = selectedIndex;
+            }
+            if(input == 'p' && selected == root) { input == 'P'; }
+            if(input == 'p') {
+                if(!copyBuffer) continue;
+                PlanItem *lastSameNest = getLastSameNest(copyBuffer);
+                lastSameNest->next = selected->next;
+                selected->next = copyBuffer;
+                copyBuffer = NULL;
+            }
+            if(input == 'P') {
+                if(!copyBuffer) continue;
+                PlanItem *lastSameNest = getLastSameNest(copyBuffer);
+                lastSameNest->next = selected->children;
+                selected->children = copyBuffer;
+                copyBuffer = NULL;
             }
             if(input == 0x09) {
                 if(selected->children) selected->collapsed = !selected->collapsed;
@@ -362,12 +449,53 @@ int main(int argc, char **argv) {
             }
             selected->text[(selected->len)++] = input;
         }
+        else if(mode == VISUAL_MODE) {
+            if(input == '\e') { mode = NORMAL_MODE; }
+            if(input == 'j') {
+                // TODO: if an item with children gets selected, visually select all children
+                if(!selected->next) continue;
+                selectedIndex = getPlanItemIndex(root, selected->next);
+                selected = selected->next;
+                if(selectedIndex > visualSelectionEnd) visualSelectionEnd = selectedIndex;
+            }
+            if(input == 'k') {
+                PlanItem *previous = getPreviousItemVisual(root, selected);
+                if(!previous) continue;
+                int previousIndex = getPlanItemIndex(root, previous);
+                // bool isParent = previous->children == selected;
+                selectedIndex = previousIndex;
+                selected = previous;
+                if(selectedIndex < visualSelectionStart) visualSelectionStart = selectedIndex;
+            }
+            if(input == 'd') {
+                PlanItem *item = getPlanItemAtIndex(root, visualSelectionStart);
+                PlanItem *previous = getPreviousItemVisual(root, item);
+
+                PlanItem *removed = removeSelection(root, visualSelectionStart, visualSelectionEnd);
+                freePlanItem(copyBuffer, true);
+                copyBuffer = removed;
+                mode = NORMAL_MODE;
+
+                if(previous) {
+                    selected = previous;
+                    selectedIndex = getPlanItemIndex(root, previous);
+                }
+                else {
+                    selectedIndex = 0;
+                    selected = getPlanItemAtIndex(root, selectedIndex);
+                    if(!selected) selected = root;
+                }
+            }
+        }
     }
 
-    writePlanItem(root, savefile);
+    if(doSave) { 
+        savefile = fopen("./planner.txt", "w+");
+        writePlanItem(root, savefile);
+        fclose(savefile);
+    }
 
     fclose(logfile);
-    fclose(savefile);
 
     writeTerm("\e[?1049l"); // restore screen
     tcsetattr(STDIN_FILENO, TCSANOW, &restore);
