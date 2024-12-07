@@ -164,6 +164,7 @@ int __getPlanItemAtIndex(PlanItem *current, PlanItem **result, int index, int cu
 }
 
 PlanItem *getPlanItemAtIndex(PlanItem *root, int index) {
+    if((index == 0 || index == -1) && !root->children) return root;
     PlanItem *result = NULL;
     __getPlanItemAtIndex(root->children, &result, index, 0);
     return result;
@@ -210,6 +211,8 @@ PlanItem *__getPreviousItemVisual(PlanItem *current, PlanItem *targetNext) {
 }
 
 PlanItem *getPreviousItemVisual(PlanItem *root, PlanItem *targetNext) {
+    if(targetNext == root->children) return root;
+    if(targetNext == root->next) return root;
     return __getPreviousItemVisual(root->children, targetNext);
 }
 
@@ -237,6 +240,8 @@ PlanItem *getLastSameNest(PlanItem *item) {
 }
 
 PlanItem *planItemDeepCopy(PlanItem *base, bool cloneNext) {
+    if(!base) return NULL;
+
     PlanItem *clone = malloc(sizeof(PlanItem));
     clone->len = base->len;
     clone->capacity = base->capacity;
@@ -244,6 +249,9 @@ PlanItem *planItemDeepCopy(PlanItem *base, bool cloneNext) {
     clone->done = base->done;
     clone->collapsed = false;
     memcpy(clone->text, base->text, clone->len);
+
+    clone->children = NULL;
+    clone->next = NULL;
 
     clone->children = planItemDeepCopy(base->children, true);
     if(cloneNext) clone->next = planItemDeepCopy(base->next, true);
@@ -323,9 +331,17 @@ int main(int argc, char **argv) {
             simulatedInputLen--;
         }
 
-        ctob(input, buf);
-        fwrite(buf, sizeof(char), 8, logfile);
-        fwrite("\n", sizeof(char), 1, logfile);
+        logfile = fopen("./log.txt", "a+");
+        fprintf(logfile, "SELECTED INDEX: %d\n", selectedIndex);
+        fprintf(logfile, "AMOUNT: %d\n", getPlanItemAmount(root) - 1);
+        fprintf(logfile, "ROOT NEXT: %d\n", root->next);
+        fclose(logfile);
+
+        // fwrite(buf, sizeof(char), 8, logfile);
+
+        // ctob(input, buf);
+        // fwrite(buf, sizeof(char), 8, logfile);
+        // fwrite("\n", sizeof(char), 1, logfile);
 
         if(mode == NORMAL_MODE) {
             if(input == 'q') break;
@@ -383,7 +399,7 @@ int main(int argc, char **argv) {
                 visualSelectionStart = selectedIndex;
                 visualSelectionEnd = selectedIndex;
             }
-            if(input == 'p' && selected == root) { input == 'P'; }
+            if(input == 'p' && selected == root) { input = 'P'; }
             if(input == 'p') {
                 if(!copyBuffer) continue;
                 PlanItem *lastSameNest = getLastSameNest(copyBuffer);
@@ -439,6 +455,7 @@ int main(int argc, char **argv) {
                 selected = previous;
                 if(selectedIndex < visualSelectionStart) visualSelectionStart = selectedIndex;
             }
+            // FIXME: segfaults
             if(input == 'd') {
                 PlanItem *item = getPlanItemAtIndex(root, visualSelectionStart);
                 PlanItem *previous = getPreviousItemVisual(root, item);
@@ -455,7 +472,11 @@ int main(int argc, char **argv) {
                 else {
                     selectedIndex = 0;
                     selected = getPlanItemAtIndex(root, selectedIndex);
-                    if(!selected) selected = root;
+                }
+
+                if(!selected || selectedIndex == -1) {
+                    selected = root;
+                    selectedIndex = 0;
                 }
             }
             // TODO: implement copy 'y'
@@ -468,7 +489,7 @@ int main(int argc, char **argv) {
         fclose(savefile);
     }
 
-    fclose(logfile);
+    // fclose(logfile);
 
     printf("\e[?1049l"); // restore screen
     tcsetattr(STDIN_FILENO, TCSANOW, &restore);
