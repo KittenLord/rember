@@ -236,6 +236,20 @@ PlanItem *getLastSameNest(PlanItem *item) {
     return getLastSameNest(item->next);
 }
 
+PlanItem *planItemDeepCopy(PlanItem *base, bool cloneNext) {
+    PlanItem *clone = malloc(sizeof(PlanItem));
+    clone->len = base->len;
+    clone->capacity = base->capacity;
+    clone->text = malloc(clone->len);
+    clone->done = base->done;
+    clone->collapsed = false;
+    memcpy(clone->text, base->text, clone->len);
+
+    clone->children = planItemDeepCopy(base->children, true);
+    if(cloneNext) clone->next = planItemDeepCopy(base->next, true);
+    return clone;
+}
+
 int main(int argc, char **argv) {
     struct termios term, restore;
     tcgetattr(STDIN_FILENO, &term);
@@ -375,14 +389,14 @@ int main(int argc, char **argv) {
                 PlanItem *lastSameNest = getLastSameNest(copyBuffer);
                 lastSameNest->next = selected->next;
                 selected->next = copyBuffer;
-                copyBuffer = NULL;
+                copyBuffer = planItemDeepCopy(copyBuffer, true);
             }
             if(input == 'P') {
                 if(!copyBuffer) continue;
                 PlanItem *lastSameNest = getLastSameNest(copyBuffer);
                 lastSameNest->next = selected->children;
                 selected->children = copyBuffer;
-                copyBuffer = NULL;
+                copyBuffer = planItemDeepCopy(copyBuffer, true);
             }
             if(input == 0x09) {
                 if(selected->children) selected->collapsed = !selected->collapsed;
@@ -444,6 +458,7 @@ int main(int argc, char **argv) {
                     if(!selected) selected = root;
                 }
             }
+            // TODO: implement copy 'y'
         }
     }
 

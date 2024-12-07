@@ -12,7 +12,14 @@ k - move up
 c - change item's name
 Enter - mark item as done
 Tab - collapse an item
+d - delete selection (deleted tasks get copied)
+v - enable multiple line selection
+Esc - exit multiple selection mode
+p - paste after selected task
+P - paste as a child of selected task
 q - exit
+Q - exit without saving
+w - save
 
 TODO:
 - [ ] Windows support (shoudln't be too hard [clueless])
