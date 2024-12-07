@@ -303,11 +303,13 @@ int main(int argc, char **argv) {
                 selected->len = 0;
                 mode = INSERT_MODE;
             }
+            if(input == 0x0A) {
+                selected->done = !selected->done;
+            }
         }
         else if(mode == INSERT_MODE) {
             if(input == 'q') break;
-            if(input == 0x0A && selected->len > 0) { mode = NORMAL_MODE; continue; }
-            if(input == 0x0A) continue;
+            if(input == 0x0A) { if(selected->text > 0) { mode = NORMAL_MODE; } continue; }
             if(input == 0x7F) {
                 if(selected->len <= 0) continue;
                 selected->len--;
