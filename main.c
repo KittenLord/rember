@@ -347,9 +347,9 @@ int main(int argc, char **argv) {
                 selected->done = !selected->done;
             }
         }
-        // fix for cyrillic (and unicode in general)
+        // TODO: fix for cyrillic (and unicode in general)
         else if(mode == INSERT_MODE) {
-            if(input == 'q') break;
+            // if(input == 'q') break;
             if(input == 0x0A) { if(selected->len > 0) { mode = NORMAL_MODE; } continue; }
             if(input == 0x7F) {
                 if(selected->len <= 0) continue;
