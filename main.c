@@ -147,15 +147,25 @@ int getAmountOfDoneChildren(PlanItem *item) {
     return getAmountOfDoneSameNest(item->children);
 }
 
+#define STYLE_COLLAPSED "8"
+#define STYLE_PARTIAL "221"
+#define STYLE_DONE "34"
+#define STYLE_NOTDONE "255"
+
 int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, bool init) {
     if(init) { writeTerm("\e[2J"); setCursor(v20); if(item->children) renderPlanItem(item->children, 0, 0, selectedIndex, false); return 0; }
 
     for(int i = 0; i < indent; i++) putchar(' ');
 
-    if(index == selectedIndex) {
-        writeTerm("\e[38;5;0m");
-        writeTerm("\e[48;5;255m");
-    }
+
+    char *color = STYLE_NOTDONE;
+    int dc = getAmountOfDoneChildren(item);
+    if(isDone(item)) color = STYLE_DONE;
+    else if(dc > 0) color = STYLE_PARTIAL;
+    if(item->collapsed) color = STYLE_COLLAPSED;
+
+    if(index == selectedIndex) { printf("\e[48;5;%sm", color); printf("\e[38;5;0m"); }
+    else { printf("\e[38;5;%sm", color); }
 
     if(item->children) {
         int children = getAmountOfChildren(item);
@@ -176,7 +186,7 @@ int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, boo
 
     writeTerm("\e[1E"); // new line
 
-    if(item->children) { index = renderPlanItem(item->children, indent + 4, index + 1, selectedIndex, false); }
+    if(item->children && !item->collapsed) { index = renderPlanItem(item->children, indent + 4, index + 1, selectedIndex, false); }
     if(item->next) { index = renderPlanItem(item->next, indent, index + 1, selectedIndex, false); }
     return index;
 }
@@ -184,7 +194,7 @@ int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, boo
 int __getPlanItemAtIndex(PlanItem *current, PlanItem **result, int index, int currentIndex) {
     if(!current) return 0;
     if(currentIndex == index) { *result = current; return 0; }
-    if(current->children) currentIndex = __getPlanItemAtIndex(current->children, result, index, currentIndex + 1);
+    if(current->children && !current->collapsed) currentIndex = __getPlanItemAtIndex(current->children, result, index, currentIndex + 1);
     if(*result) return 0;
     if(current->next) currentIndex = __getPlanItemAtIndex(current->next, result, index, currentIndex + 1);
     return currentIndex;
@@ -213,7 +223,7 @@ int clamp(int n, int a, int b) {
 int __getPlanItemIndex(PlanItem *current, PlanItem *target, int index, int *result) {
     if(!current) return index;
     if(target == current) { *result = index; return 0; }
-    if(current->children) index = __getPlanItemIndex(current->children, target, index + 1, result);
+    if(current->children && !current->collapsed) index = __getPlanItemIndex(current->children, target, index + 1, result);
     if(*result > 0) return 0;
     if(current->next) index = __getPlanItemIndex(current->next, target, index + 1, result);
     return index;
@@ -312,6 +322,7 @@ int main(int argc, char **argv) {
                 mode = INSERT_MODE;
             }
             if(input == 'j') {
+                // TODO: This should count ONLY visible ones
                 int amount = getPlanItemAmount(root) - 1; // -1 to account for root
                 selectedIndex = clamp(selectedIndex + 1, 0, amount);
                 selected = getPlanItemAtIndex(root, selectedIndex);
@@ -325,10 +336,11 @@ int main(int argc, char **argv) {
                 selected->len = 0;
                 mode = INSERT_MODE;
             }
+            if(input == 0x09) {
+                if(selected->children) selected->collapsed = !selected->collapsed;
+                else                   selected->collapsed = false;
+            }
             if(input == 0x0A) {
-                fprintf(logfile, "SELECTED INDEX: %d\n", selectedIndex);
-                fprintf(logfile, "SELECTED: %x\n", selected);
-                fprintf(logfile, "AMOUNT: %x\n", getPlanItemAmount(root));
                 selected->done = !selected->done;
             }
         }
