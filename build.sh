@@ -1,1 +1,1 @@
-gcc main.c -o ./output -ggdb && ./output
+gcc main.c -o ./rember -ggdb && ./rember

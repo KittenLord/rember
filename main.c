@@ -336,6 +336,9 @@ int main(int argc, char **argv) {
                 selected->len = 0;
                 mode = INSERT_MODE;
             }
+            if(input == 'd') {
+                // deletion is actually not that trivial without a doubly-linked list
+            }
             if(input == 0x09) {
                 if(selected->children) selected->collapsed = !selected->collapsed;
                 else                   selected->collapsed = false;
@@ -344,6 +347,7 @@ int main(int argc, char **argv) {
                 selected->done = !selected->done;
             }
         }
+        // fix for cyrillic (and unicode in general)
         else if(mode == INSERT_MODE) {
             if(input == 'q') break;
             if(input == 0x0A) { if(selected->len > 0) { mode = NORMAL_MODE; } continue; }
