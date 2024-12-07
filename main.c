@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/stat.h>
@@ -8,6 +7,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <assert.h>
 
 void ctob(char c, char buf[8]) {
     for(int i = 0; i < 8; i++) { buf[i] = ((c >> (8 - i - 1)) & 1) + '0'; }

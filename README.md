@@ -2,7 +2,7 @@ A small planner/reminder tui application
 
 Wanted to do this for a long time, but also got inspiration from dear Mister Azozin (https://github.com/rexim/tore)
 
-How to use:
+# How to use:
 
 o - add a new item on the same level
 a - add a new item as a child
@@ -21,8 +21,8 @@ q - exit
 Q - exit without saving
 w - save
 
-TODO:
-- [ ] Windows support (shoudln't be too hard [clueless])
+# TODO:
+- [ ] Windows support (shouldn't be too hard [clueless])
 - [ ] Configuration/customization
 - [ ] Actually do something when a line is too long
 - [ ] Recurring tasks
