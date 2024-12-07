@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/stat.h>
@@ -78,8 +79,8 @@ void freePlanItem(PlanItem *item, bool freeNext) {
 #define NEXT_ITEM 1
 #define CHILD_ITEM 2
 
-PlanItem *parsePlanItem(char *data) {
-    size_t text_len = *(data++);
+PlanItem *parsePlanItem(char **data) {
+    size_t text_len = *((*data)++);
     if(!text_len) return NULL;
 
     PlanItem *this = calloc(1, sizeof(PlanItem));
@@ -87,20 +88,24 @@ PlanItem *parsePlanItem(char *data) {
     this->text = malloc(text_len);
     this->len = text_len;
     this->capacity = text_len;
-    memcpy(this->text, data, text_len);
-    data += text_len;
+    memcpy(this->text, *data, text_len);
+    *data += text_len;
 
-    this->done = !!*(data++);
-    char control = *(data++);
+    this->done = !!*((*data)++);
+    char control = *((*data)++);
 
     if(control == NO_ITEM) return this;
-    if(control == CHILD_ITEM) this->children = parsePlanItem(data);
-    if(control == NEXT_ITEM) this->next = parsePlanItem(data);
+
+    if(control == CHILD_ITEM) { this->children = parsePlanItem(data); control = *((*data)++); }
+    if(control == NEXT_ITEM) { this->next = parsePlanItem(data); control = *((*data)++); }
+    assert(control == NO_ITEM);
     return this;
 }
 
+// len text x 2 ... 0 1 ... 0
+
 void writePlanItem(PlanItem *item, FILE *file) {
-    char len = *(char *)(&item->len);
+    char len = *(char *)(&(item->len));
     fwrite(&len, sizeof(char), 1, file);
     fwrite(item->text, sizeof(char), len, file);
     fwrite(&item->done, sizeof(char), 1, file);
@@ -143,7 +148,7 @@ int getAmountOfDoneChildren(PlanItem *item) {
 }
 
 int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, bool init) {
-    if(init) { writeTerm("\e[2J"); setCursor(v20); renderPlanItem(item->children, 0, 0, selectedIndex, false); return 0; }
+    if(init) { writeTerm("\e[2J"); setCursor(v20); if(item->children) renderPlanItem(item->children, 0, 0, selectedIndex, false); return 0; }
 
     for(int i = 0; i < indent; i++) putchar(' ');
 
@@ -182,7 +187,7 @@ int __getPlanItemAtIndex(PlanItem *current, PlanItem **result, int index, int cu
     if(current->children) currentIndex = __getPlanItemAtIndex(current->children, result, index, currentIndex + 1);
     if(*result) return 0;
     if(current->next) currentIndex = __getPlanItemAtIndex(current->next, result, index, currentIndex + 1);
-    return 0;
+    return currentIndex;
 }
 
 PlanItem *getPlanItemAtIndex(PlanItem *root, int index) {
@@ -203,6 +208,21 @@ int clamp(int n, int a, int b) {
     if(n < a) return a;
     if(n >= b) return b - 1;
     return n;
+}
+
+int __getPlanItemIndex(PlanItem *current, PlanItem *target, int index, int *result) {
+    if(!current) return index;
+    if(target == current) { *result = index; return 0; }
+    if(current->children) index = __getPlanItemIndex(current->children, target, index + 1, result);
+    if(*result > 0) return 0;
+    if(current->next) index = __getPlanItemIndex(current->next, target, index + 1, result);
+    return index;
+}
+
+int getPlanItemIndex(PlanItem *root, PlanItem *target) {
+    int result = -1;
+    __getPlanItemIndex(root->children, target, 0, &result);
+    return result;
 }
 
 int main(int argc, char **argv) {
@@ -229,7 +249,8 @@ int main(int argc, char **argv) {
         fseek(savefile, 0, SEEK_SET);
         char *buffer = malloc(len);
         fread(buffer, sizeof(char), len, savefile);
-        root = parsePlanItem(buffer);
+        char *tempBuf = buffer;
+        root = parsePlanItem(&tempBuf);
         free(buffer);
     } 
     else {
@@ -241,6 +262,9 @@ int main(int argc, char **argv) {
         root->capacity = ROOT_LEN; // not necessary
         memcpy(root->text, ROOT_NAME, ROOT_LEN);
     }
+
+    fclose(savefile);
+    savefile = fopen("./planner.txt", "w+");
 
     PlanItem *selected = root;
     int selectedIndex = 0;
@@ -254,6 +278,8 @@ int main(int argc, char **argv) {
     int mode = NORMAL_MODE;
 
     while(true) { 
+        renderPlanItem(root, 0, 0, selectedIndex, true);
+
         read(STDIN_FILENO, &input, 1);
 
         ctob(input, buf);
@@ -268,11 +294,10 @@ int main(int argc, char **argv) {
                 child->text = calloc(16, sizeof(char));
                 child->capacity = 16;
 
-                child->children = selected->children;
+                child->next = selected->children;
                 selected->children = child;
                 selected = child;
-                int amount = getPlanItemAmount(root) - 1; // -1 to account for root
-                selectedIndex = clamp(selectedIndex + 1, 0, amount);
+                selectedIndex = getPlanItemIndex(root, selected);
                 mode = INSERT_MODE;
             }
             if(input == 'o') {
@@ -283,10 +308,7 @@ int main(int argc, char **argv) {
                 nnext->next = selected->next;
                 selected->next = nnext;
                 selected = nnext;
-                // TODO: Obviously do smth about copypaste, but
-                // also this doesn't work if the node has children
-                int amount = getPlanItemAmount(root) - 1; // -1 to account for root
-                selectedIndex = clamp(selectedIndex + 1, 0, amount);
+                selectedIndex = getPlanItemIndex(root, selected);
                 mode = INSERT_MODE;
             }
             if(input == 'j') {
@@ -304,15 +326,19 @@ int main(int argc, char **argv) {
                 mode = INSERT_MODE;
             }
             if(input == 0x0A) {
+                fprintf(logfile, "SELECTED INDEX: %d\n", selectedIndex);
+                fprintf(logfile, "SELECTED: %x\n", selected);
+                fprintf(logfile, "AMOUNT: %x\n", getPlanItemAmount(root));
                 selected->done = !selected->done;
             }
         }
         else if(mode == INSERT_MODE) {
             if(input == 'q') break;
-            if(input == 0x0A) { if(selected->text > 0) { mode = NORMAL_MODE; } continue; }
+            if(input == 0x0A) { if(selected->len > 0) { mode = NORMAL_MODE; } continue; }
             if(input == 0x7F) {
                 if(selected->len <= 0) continue;
                 selected->len--;
+                continue;
             }
             else if(selected->len >= selected->capacity) {
                 selected->text = realloc(selected->text, selected->capacity * 2);
@@ -320,11 +346,9 @@ int main(int argc, char **argv) {
             }
             selected->text[(selected->len)++] = input;
         }
-
-        renderPlanItem(root, 0, 0, selectedIndex, true);
     }
 
-    // writePlanItem(root, savefile);
+    writePlanItem(root, savefile);
 
     fclose(logfile);
     fclose(savefile);
