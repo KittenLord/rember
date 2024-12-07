@@ -9,6 +9,8 @@
 #include <sys/ioctl.h>
 #include <assert.h>
 
+#include "terminal.c"
+
 void ctob(char c, char buf[8]) {
     for(int i = 0; i < 8; i++) { buf[i] = ((c >> (8 - i - 1)) & 1) + '0'; }
 }
@@ -114,7 +116,7 @@ int getAmountOfDoneChildren(PlanItem *item) {
 #define STYLE_VISUAL_SELECTED "87"
 
 int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, bool visual, int vStart, int vEnd, bool init) {
-    if(init) { printf("\e[2J"); printf("\e[H"); if(item->children) renderPlanItem(item->children, 0, 0, selectedIndex, visual, vStart, vEnd, false); return 0; }
+    if(init) { eraseScreen(); goto00(); if(item->children) renderPlanItem(item->children, 0, 0, selectedIndex, visual, vStart, vEnd, false); return 0; }
 
     for(int i = 0; i < indent; i++) putchar(' ');
 
@@ -147,7 +149,7 @@ int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, boo
 
     printf("\e[0m");
 
-    printf("\e[1E"); // new line
+    gotoStartNextLine();
 
     if(item->children && !item->collapsed) { index = renderPlanItem(item->children, indent + 4, index + 1, selectedIndex, visual, vStart, vEnd, false); }
     if(item->next) { index = renderPlanItem(item->next, indent, index + 1, selectedIndex, visual, vStart, vEnd, false); }
@@ -259,6 +261,7 @@ PlanItem *planItemDeepCopy(PlanItem *base, bool cloneNext) {
 }
 
 int main(int argc, char **argv) {
+    // TODO: figure out how to do this on windows
     struct termios term, restore;
     tcgetattr(STDIN_FILENO, &term);
     tcgetattr(STDIN_FILENO, &restore);
@@ -266,8 +269,8 @@ int main(int argc, char **argv) {
     tcsetattr(STDIN_FILENO, TCSANOW, &term);
     setbuf(stdout, NULL);
 
-    printf("\e[?1049h"); // save previous screen
-    printf("\e[?25l"); // make cursor invisible
+    saveScreen();
+    invisibleCursorOn();
 
     FILE *logfile = fopen("./log.txt", "w+");
     FILE *savefile = fopen("./planner.txt", "r+");
@@ -491,7 +494,7 @@ int main(int argc, char **argv) {
 
     // fclose(logfile);
 
-    printf("\e[?1049l"); // restore screen
+    restoreScreen();
     tcsetattr(STDIN_FILENO, TCSANOW, &restore);
     return 0;
 }
