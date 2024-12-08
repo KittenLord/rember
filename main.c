@@ -2,12 +2,15 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/stat.h>
-#include <termios.h>
 #include <stdbool.h>
-#include <unistd.h>
 #include <string.h>
-#include <sys/ioctl.h>
 #include <assert.h>
+
+#include <termios.h>
+#include <sys/ioctl.h>
+
+
+#include <unistd.h>
 
 #include "terminal.c"
 
@@ -261,6 +264,7 @@ PlanItem *planItemDeepCopy(PlanItem *base, bool cloneNext) {
 }
 
 int main(int argc, char **argv) {
+
     // TODO: figure out how to do this on windows
     struct termios term, restore;
     tcgetattr(STDIN_FILENO, &term);
@@ -495,6 +499,7 @@ int main(int argc, char **argv) {
     // fclose(logfile);
 
     restoreScreen();
+
     tcsetattr(STDIN_FILENO, TCSANOW, &restore);
     return 0;
 }
