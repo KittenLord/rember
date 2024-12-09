@@ -201,12 +201,16 @@ PlanItem *getPlanItemAtIndex(PlanItem *root, int index) {
     return result;
 }
 
-int getPlanItemAmount(PlanItem *current) {
+int __getPlanItemAmount(PlanItem *current) {
     if(!current) return 0;
     int amount = 1;
-    amount += getPlanItemAmount(current->children);
-    amount += getPlanItemAmount(current->next);
+    amount += __getPlanItemAmount(current->children);
+    amount += __getPlanItemAmount(current->next);
     return amount;
+}
+
+int getPlanItemAmount(PlanItem *root) {
+    return __getPlanItemAmount(root) - 1;
 }
 
 int clamp(int n, int a, int b) {
@@ -366,7 +370,7 @@ int main(int argc, char **argv) {
 
         logfile = fopen("./log.txt", "a+");
         fprintf(logfile, "SELECTED INDEX: %d\n", selectedIndex);
-        fprintf(logfile, "AMOUNT: %d\n", getPlanItemAmount(root) - 1);
+        fprintf(logfile, "AMOUNT: %d\n", getPlanItemAmount(root));
         fprintf(logfile, "ROOT NEXT: %d\n", root->next);
         fclose(logfile);
 
@@ -404,12 +408,12 @@ int main(int argc, char **argv) {
             }
             if(input == 'j') {
                 // TODO: This should count ONLY visible ones
-                int amount = getPlanItemAmount(root) - 1; // -1 to account for root
+                int amount = getPlanItemAmount(root);
                 selectedIndex = clamp(selectedIndex + 1, 0, amount);
                 selected = getPlanItemAtIndex(root, selectedIndex);
             }
             if(input == 'k') {
-                int amount = getPlanItemAmount(root) - 1; // -1 to account for root
+                int amount = getPlanItemAmount(root);
                 selectedIndex = clamp(selectedIndex - 1, 0, amount);
                 selected = getPlanItemAtIndex(root, selectedIndex);
             }
@@ -438,13 +442,21 @@ int main(int argc, char **argv) {
                 PlanItem *lastSameNest = getLastSameNest(copyBuffer);
                 lastSameNest->next = selected->next;
                 selected->next = copyBuffer;
+
+                selectedIndex = getPlanItemIndex(root, copyBuffer);
+                selected = copyBuffer;
+
                 copyBuffer = planItemDeepCopy(copyBuffer, true);
             }
             if(input == 'P') {
                 if(!copyBuffer) continue;
                 PlanItem *lastSameNest = getLastSameNest(copyBuffer);
-                lastSameNest->next = selected->children;
+                if(lastSameNest) lastSameNest->next = selected->children;
                 selected->children = copyBuffer;
+
+                selectedIndex = getPlanItemIndex(root, copyBuffer);
+                selected = copyBuffer;
+
                 copyBuffer = planItemDeepCopy(copyBuffer, true);
             }
             if(input == 0x09) {
@@ -483,6 +495,7 @@ int main(int argc, char **argv) {
             if(input == 'k') {
                 PlanItem *previous = getPreviousItemVisual(root, selected);
                 if(!previous) continue;
+                if(previous == root) continue;
                 int previousIndex = getPlanItemIndex(root, previous);
                 // bool isParent = previous->children == selected;
                 selectedIndex = previousIndex;
@@ -492,6 +505,12 @@ int main(int argc, char **argv) {
             // hopefully fixed
             if(input == 'd') {
                 PlanItem *item = getPlanItemAtIndex(root, visualSelectionStart);
+                if(item == root) {
+                    simulatedInput = "v";
+                    simulatedInputLen = 1;
+                    continue;
+                }
+
                 PlanItem *previous = getPreviousItemVisual(root, item);
 
                 PlanItem *removed = removeSelection(root, visualSelectionStart, visualSelectionEnd);
