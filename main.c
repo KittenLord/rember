@@ -20,6 +20,10 @@ void ctob(char c, char buf[8]) {
 
 typedef struct PlanItem PlanItem;
 
+// TODO: implement auto-reset/remind timer with multiple options
+// Option A: remind every N seconds (time_t)
+// Option B: remind every selected weekday at particular time
+// Option C: remind every selected month at every selected date at particular time
 typedef struct PlanItem {
     char *text;
     size_t len;
@@ -39,10 +43,34 @@ void freePlanItem(PlanItem *item, bool freeNext) {
     free(item);
 }
 
+/*
+
+    File format spec (kinda)
+
+    entry ::= (TextLength :: usize)
+              (Text :: String[TextLength]) 
+              (IsDone :: u8 (Bool))  
+              maybeChild
+              maybeNext
+              (NO_ITEM :: u8)
+
+    maybeChild ::= (CHILD_ITEM :: u8)
+                   entry
+
+                 | e
+
+    maybeNext ::= (NEXT_ITEM :: u8)
+                  entry
+
+                | e
+
+*/
+
 #define NO_ITEM 0
 #define NEXT_ITEM 1
 #define CHILD_ITEM 2
 
+// this will ABSOLUTELY explode if it encounters bad data btw
 PlanItem *parsePlanItem(char **data) {
     size_t text_len = *((*data)++);
     if(!text_len) return NULL;
@@ -65,8 +93,6 @@ PlanItem *parsePlanItem(char **data) {
     assert(control == NO_ITEM);
     return this;
 }
-
-// len text x 2 ... 0 1 ... 0
 
 void writePlanItem(PlanItem *item, FILE *file) {
     char len = *(char *)(&(item->len));
@@ -446,6 +472,7 @@ int main(int argc, char **argv) {
         }
         else if(mode == VISUAL_MODE) {
             if(input == '\e') { mode = NORMAL_MODE; }
+            if(input == 'v') { mode = NORMAL_MODE; }
             if(input == 'j') {
                 // TODO: if an item with children gets selected, visually select all children
                 if(!selected->next) continue;
@@ -462,7 +489,7 @@ int main(int argc, char **argv) {
                 selected = previous;
                 if(selectedIndex < visualSelectionStart) visualSelectionStart = selectedIndex;
             }
-            // FIXME: segfaults
+            // hopefully fixed
             if(input == 'd') {
                 PlanItem *item = getPlanItemAtIndex(root, visualSelectionStart);
                 PlanItem *previous = getPreviousItemVisual(root, item);
