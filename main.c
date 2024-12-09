@@ -8,8 +8,6 @@
 
 #include <termios.h>
 #include <sys/ioctl.h>
-
-
 #include <unistd.h>
 
 #include "terminal.c"
@@ -47,7 +45,7 @@ void freePlanItem(PlanItem *item, bool freeNext) {
 
     File format spec (kinda)
 
-    entry ::= (TextLength :: usize)
+    entry ::= (TextLength :: u8)
               (Text :: String[TextLength]) 
               (IsDone :: u8 (Bool))  
               maybeChild
@@ -72,7 +70,7 @@ void freePlanItem(PlanItem *item, bool freeNext) {
 
 // this will ABSOLUTELY explode if it encounters bad data btw
 PlanItem *parsePlanItem(char **data) {
-    size_t text_len = *((*data)++);
+    size_t text_len = *((*data)++); // maybe change to 8 bytes?
     if(!text_len) return NULL;
 
     PlanItem *this = calloc(1, sizeof(PlanItem));
@@ -149,6 +147,7 @@ int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, boo
 
     for(int i = 0; i < indent; i++) putchar(' ');
 
+    // TODO: refactor into separate function
     char *color = STYLE_NOTDONE;
     int dc = getAmountOfDoneChildren(item);
     if(isDone(item)) color = STYLE_DONE;
@@ -358,6 +357,8 @@ int main(int argc, char **argv) {
     char *simulatedInput = "";
     size_t simulatedInputLen = 0;
 
+    #define simulate(input) do { simulatedInput = input; simulatedInputLen = strlen(input); } while(0)
+
     while(true) { 
         renderPlanItem(root, 0, 0, selectedIndex, mode == VISUAL_MODE, visualSelectionStart, visualSelectionEnd, true);
 
@@ -381,6 +382,7 @@ int main(int argc, char **argv) {
         // fwrite("\n", sizeof(char), 1, logfile);
 
         if(mode == NORMAL_MODE) {
+            // maybe auto-saving shouldn't be the default?
             if(input == 'q') break;
             if(input == 'Q') { doSave = false; break; }
             if(input == 'o' && selected == root) input = 'a';
@@ -423,8 +425,7 @@ int main(int argc, char **argv) {
             }
             // this is actually identical to "vd", wonder if I can do something about it...
             if(input == 'd') {
-                simulatedInput = "vd";
-                simulatedInputLen = 2;
+                simulate("vd");
             }
             if(input == 'w') {
                 savefile = fopen("./planner.txt", "w+");
@@ -506,8 +507,7 @@ int main(int argc, char **argv) {
             if(input == 'd') {
                 PlanItem *item = getPlanItemAtIndex(root, visualSelectionStart);
                 if(item == root) {
-                    simulatedInput = "v";
-                    simulatedInputLen = 1;
+                    simulate("v");
                     continue;
                 }
 
