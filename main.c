@@ -12,9 +12,28 @@
 #include <unistd.h>
 #elif _WIN32
 #include <windows.h>
+#include <fcntl.h>
 #endif
 
 #include "terminal.c"
+
+#ifdef __linux__
+#define KEY_BACKSPACE 0x7F
+#elif _WIN32
+#define KEY_BACKSPACE 0x08
+#endif
+
+#ifdef __linux__
+#define KEY_ENTER 0x0A
+#elif _WIN32
+#define KEY_ENTER 0x0D
+#endif
+
+#ifdef __linux__
+#define KEY_ESCAPE '\e'
+#elif _WIN32
+#define KEY_ESCAPE '`'
+#endif
 
 void ctob(char c, char buf[8]) {
     for(int i = 0; i < 8; i++) { buf[i] = ((c >> (8 - i - 1)) & 1) + '0'; }
@@ -304,7 +323,6 @@ int main(int argc, char **argv) {
     tcgetattr(STDIN_FILENO, &restore);
     term.c_lflag &= ~(ICANON | ECHO);
     tcsetattr(STDIN_FILENO, TCSANOW, &term);
-    setbuf(stdout, NULL);
 #elif _WIN32
     DWORD term, restore;
     HANDLE console = GetStdHandle(STD_INPUT_HANDLE);
@@ -313,7 +331,10 @@ int main(int argc, char **argv) {
     GetConsoleMode(console, &restore);
     term &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
     SetConsoleMode(console, term);
+    _setmode( _fileno( stdin), _O_BINARY); // enter is read properly
 #endif
+    setbuf(stdout, NULL);
+    setbuf(stdin, NULL);
 
 
     saveScreen();
@@ -383,10 +404,13 @@ int main(int argc, char **argv) {
 
     #define simulate(input) do { simulatedInput = input; simulatedInputLen = strlen(input); } while(0)
 
+    int iteration = 0;
     while(true) { 
         renderPlanItem(root, 0, 0, selectedIndex, mode == VISUAL_MODE, visualSelectionStart, visualSelectionEnd, true);
 
-        if(simulatedInputLen == 0) read(STDIN_FILENO, &input, 1);
+        if(simulatedInputLen == 0) {
+            read(STDIN_FILENO, &input, 1);
+        }
         else {
             input = *simulatedInput;
             simulatedInput++;
@@ -398,6 +422,7 @@ int main(int argc, char **argv) {
         log("AMOUNT: %d\n", getPlanItemAmount(root));
         log("ROOT NEXT: %d\n", root->next);
         log("KEY: %s\n", buf);
+        log("ITERATION: %d\n", ++iteration);
 
         if(mode == NORMAL_MODE) {
             // maybe auto-saving shouldn't be the default?
@@ -483,15 +508,16 @@ int main(int argc, char **argv) {
                 if(selected->children) selected->collapsed = !selected->collapsed;
                 else                   selected->collapsed = false;
             }
-            if(input == 0x0A) {
+            if(input == KEY_ENTER) {
                 selected->done = !selected->done;
             }
         }
         // TODO: fix for cyrillic (and unicode in general)
+
+        // TODO: cancel input
         else if(mode == INSERT_MODE) {
-            // if(input == 'q') break;
-            if(input == 0x0A) { if(selected->len > 0) { mode = NORMAL_MODE; } continue; }
-            if(input == 0x7F) { if(selected->len > 0) selected->len--; continue; }
+            if(input == KEY_ENTER) { if(selected->len > 0) { mode = NORMAL_MODE; } continue; }
+            if(input == KEY_BACKSPACE) { if(selected->len > 0) selected->len--; continue; }
 
             if(selected->len >= selected->capacity) {
                 selected->text = realloc(selected->text, selected->capacity * 2);
@@ -500,7 +526,8 @@ int main(int argc, char **argv) {
             selected->text[(selected->len)++] = input;
         }
         else if(mode == VISUAL_MODE) {
-            if(input == '\e') { mode = NORMAL_MODE; }
+            // currently doesn't work on windows, and i'm not sure why...
+            if(input == KEY_ESCAPE) { mode = NORMAL_MODE; }
             if(input == 'v') { mode = NORMAL_MODE; }
             if(input == 'j') {
                 // TODO: if an item with children gets selected, visually select all children
@@ -565,5 +592,6 @@ int main(int argc, char **argv) {
 #elif _WIN32
     SetConsoleMode(console, term);
 #endif
+
     return 0;
 }
