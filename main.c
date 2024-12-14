@@ -29,6 +29,7 @@
 #define KEY_ENTER 0x0D
 #endif
 
+// a very bad solution, but idk how to fix this atm
 #ifdef __linux__
 #define KEY_ESCAPE '\e'
 #elif _WIN32
