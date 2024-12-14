@@ -6,9 +6,13 @@
 #include <string.h>
 #include <assert.h>
 
+#ifdef __linux__
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#elif _WIN32
+#include <windows.h>
+#endif
 
 #include "terminal.c"
 
@@ -294,19 +298,39 @@ PlanItem *planItemDeepCopy(PlanItem *base, bool cloneNext) {
 
 int main(int argc, char **argv) {
 
-    // TODO: figure out how to do this on windows
+#ifdef __linux__
     struct termios term, restore;
     tcgetattr(STDIN_FILENO, &term);
     tcgetattr(STDIN_FILENO, &restore);
     term.c_lflag &= ~(ICANON | ECHO);
     tcsetattr(STDIN_FILENO, TCSANOW, &term);
     setbuf(stdout, NULL);
+#elif _WIN32
+    DWORD term, restore;
+    HANDLE console = GetStdHandle(STD_INPUT_HANDLE);
+
+    GetConsoleMode(console, &term);
+    GetConsoleMode(console, &restore);
+    term &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
+    SetConsoleMode(console, term);
+#endif
+
 
     saveScreen();
     invisibleCursorOn();
 
     FILE *logfile = fopen("./log.txt", "w+");
+    if(logfile) fclose(logfile); \
+
     FILE *savefile = fopen("./planner.txt", "r+");
+
+    #define log(text, ...) do { \
+        logfile = fopen("./log.txt", "a+"); \
+        if(logfile) { \
+            fprintf(logfile, text, __VA_ARGS__); \
+            fclose(logfile); \
+        } \
+    } while(0)
 
     bool new = false;
     if(!savefile) { new = true; savefile = fopen("./planner.txt", "w+"); }
@@ -341,7 +365,7 @@ int main(int argc, char **argv) {
     PlanItem *copyBuffer = NULL;
 
     char input;
-    char buf[8];
+    char buf[9] = "xxxxxxxx\0";
 
     int visualSelectionStart = -1;
     int visualSelectionEnd = -1;
@@ -369,17 +393,11 @@ int main(int argc, char **argv) {
             simulatedInputLen--;
         }
 
-        logfile = fopen("./log.txt", "a+");
-        fprintf(logfile, "SELECTED INDEX: %d\n", selectedIndex);
-        fprintf(logfile, "AMOUNT: %d\n", getPlanItemAmount(root));
-        fprintf(logfile, "ROOT NEXT: %d\n", root->next);
-        fclose(logfile);
-
-        // fwrite(buf, sizeof(char), 8, logfile);
-
-        // ctob(input, buf);
-        // fwrite(buf, sizeof(char), 8, logfile);
-        // fwrite("\n", sizeof(char), 1, logfile);
+        ctob(input, buf);
+        log("SELECTED INDEX: %d\n", selectedIndex);
+        log("AMOUNT: %d\n", getPlanItemAmount(root));
+        log("ROOT NEXT: %d\n", root->next);
+        log("KEY: %s\n", buf);
 
         if(mode == NORMAL_MODE) {
             // maybe auto-saving shouldn't be the default?
@@ -419,6 +437,7 @@ int main(int argc, char **argv) {
                 selectedIndex = clamp(selectedIndex - 1, 0, amount);
                 selected = getPlanItemAtIndex(root, selectedIndex);
             }
+            // TODO: cancel on \e
             if(input == 'c') {
                 selected->len = 0;
                 mode = INSERT_MODE;
@@ -472,12 +491,9 @@ int main(int argc, char **argv) {
         else if(mode == INSERT_MODE) {
             // if(input == 'q') break;
             if(input == 0x0A) { if(selected->len > 0) { mode = NORMAL_MODE; } continue; }
-            if(input == 0x7F) {
-                if(selected->len <= 0) continue;
-                selected->len--;
-                continue;
-            }
-            else if(selected->len >= selected->capacity) {
+            if(input == 0x7F) { if(selected->len > 0) selected->len--; continue; }
+
+            if(selected->len >= selected->capacity) {
                 selected->text = realloc(selected->text, selected->capacity * 2);
                 selected->capacity *= 2;
             }
@@ -542,10 +558,12 @@ int main(int argc, char **argv) {
         fclose(savefile);
     }
 
-    // fclose(logfile);
-
     restoreScreen();
 
+#ifdef __linux
     tcsetattr(STDIN_FILENO, TCSANOW, &restore);
+#elif _WIN32
+    SetConsoleMode(console, term);
+#endif
     return 0;
 }
