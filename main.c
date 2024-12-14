@@ -116,6 +116,10 @@ PlanItem *parsePlanItem(char **data) {
     return this;
 }
 
+// FIXME: for some reason after writing on windows this doesn't work
+// the only idea I currently have is that when writing \n windows
+// automatically writes \r\n instead (cuz I found 0x0D0A in xxd), but
+// regardless, I'll look into this later
 void writePlanItem(PlanItem *item, FILE *file) {
     char len = *(char *)(&(item->len));
     fwrite(&len, sizeof(char), 1, file);
