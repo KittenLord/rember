@@ -8,8 +8,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
-
+#include <signal.h>
 #include <assert.h>
+
 #ifdef __linux__
 #include <termios.h>
 #include <sys/ioctl.h>
@@ -54,6 +55,52 @@
 #define NORMAL_MODE 0
 #define INSERT_MODE 1
 #define VISUAL_MODE 2
+#define PROMPT_MODE 3
+
+#define UI_BOOL 0
+#define UI_INT 1
+
+typedef struct UIElement UIElement;
+
+struct UIElement {
+    UIElement *h;
+    UIElement *j;
+    UIElement *k;
+    UIElement *l;
+
+    char type;
+    union {
+        struct {
+            bool value;
+        } uiBool;
+        struct {
+            int min;
+            int max;
+            int value;
+        } uiInt;
+    };
+};
+
+typedef struct {
+    UIElement *initial;
+    UIElement *selected;
+
+    UIElement delayH;
+    UIElement delayMin;
+    UIElement delayS;
+
+    UIElement delayD;
+    UIElement delayM;
+    UIElement delayY;
+
+    UIElement offsetH;
+    UIElement offsetMin;
+    UIElement offsetS;
+
+    UIElement offsetD;
+    UIElement offsetM;
+    UIElement offsetY;
+} RemindEveryUI;
 
 struct InteractiveState {
     PlanItem *root;
@@ -62,13 +109,141 @@ struct InteractiveState {
 
     int vStart;
     int vEnd;
+
+    RemindEveryUI remindEveryUI;
 };
 struct InteractiveState s;
+
+UIElement createUIInt(int min, int max, int value) {
+    UIElement e = {0};
+    e.uiInt.min = min;
+    e.uiInt.max = max;
+    e.uiInt.value = value;
+    return e;
+}
+
+void verticalUIBond(UIElement *up, UIElement *down) {
+    up->j = down;
+    down->k = up;
+}
+
+void horizontalUIBond(UIElement *left, UIElement *right) {
+    left->l = right;
+    right->h = left;
+}
+
+#define verticalUIBond2(pre, a, b) do { pre.a.k = &pre.a; verticalUIBond(&pre.a, &pre.b); pre.b.j = &pre.j; } while(0)
+#define verticalUIBond3(pre, a, b, c) do { pre.a.k = &pre.a; verticalUIBond(&pre.a, &pre.b); verticalUIBond(&pre.b, &pre.c); pre.c.j = &pre.c; } while(0)
+#define verticalUIBond4(pre, a, b, c, d) do { pre.a.k = &pre.a; verticalUIBond(&pre.a, &pre.b); verticalUIBond(&pre.b, &pre.c); verticalUIBond(&pre.c, &pre.d); pre.d.j = &pre.d; } while(0)
+
+#define horizontalUIBond2(pre, a, b) do { pre.a.h = &pre.a; horizontalUIBond(&pre.a, &pre.b); pre.b.l = &pre.b; } while(0)
+#define horizontalUIBond3(pre, a, b, c) do { pre.a.h = &pre.a; horizontalUIBond(&pre.a, &pre.b); horizontalUIBond(&pre.b, &pre.c); pre.c.l = &pre.c; } while(0)
+#define horizontalUIBond4(pre, a, b, c, d) do { pre.a.h = &pre.a; horizontalUIBond(&pre.a, &pre.b); horizontalUIBond(&pre.b, &pre.c); horizontalUIBond(&pre.c, &pre.d); pre.d.l = &pre.d; } while(0)
+
+void setupRemindEveryUI() {
+    s.remindEveryUI.delayH      = createUIInt(0, 24, 0);
+    s.remindEveryUI.delayMin    = createUIInt(0, 60, 0);
+    s.remindEveryUI.delayS      = createUIInt(0, 60, 0);
+                                                         
+    s.remindEveryUI.delayD      = createUIInt(1, 32, 0);
+    s.remindEveryUI.delayM      = createUIInt(1, 13, 0);
+    s.remindEveryUI.delayY      = createUIInt(0, 10000, 0);
+                                                         
+    s.remindEveryUI.offsetH     = createUIInt(0, 24, 0);
+    s.remindEveryUI.offsetMin   = createUIInt(0, 60, 0);
+    s.remindEveryUI.offsetS     = createUIInt(0, 60, 0);
+                                                         
+    s.remindEveryUI.offsetD     = createUIInt(1, 32, 0);
+    s.remindEveryUI.offsetM     = createUIInt(1, 13, 0);
+    s.remindEveryUI.offsetY     = createUIInt(0, 10000, 0);
+
+    s.remindEveryUI.initial = &s.remindEveryUI.delayH;
+    s.remindEveryUI.selected = s.remindEveryUI.initial;
+
+    verticalUIBond4(s.remindEveryUI, delayH, delayD, offsetH, offsetD);
+    verticalUIBond4(s.remindEveryUI, delayMin, delayM, offsetMin, offsetY);
+    verticalUIBond4(s.remindEveryUI, delayS, delayY, offsetS, offsetY);
+
+    horizontalUIBond3(s.remindEveryUI, delayH, delayMin, delayS);
+    horizontalUIBond3(s.remindEveryUI, delayD, delayM, delayY);
+    horizontalUIBond3(s.remindEveryUI, offsetH, offsetMin, offsetS);
+    horizontalUIBond3(s.remindEveryUI, offsetD, offsetM, offsetY);
+}
+
+void inputRemindEveryUI(char input) {
+    if(input == 'h') {
+        s.remindEveryUI.selected = s.remindEveryUI.selected->h;
+    }
+    if(input == 'j') {
+        s.remindEveryUI.selected = s.remindEveryUI.selected->j;
+    }
+    if(input == 'k') {
+        s.remindEveryUI.selected = s.remindEveryUI.selected->k;
+    }
+    if(input == 'l') {
+        s.remindEveryUI.selected = s.remindEveryUI.selected->l;
+    }
+}
+
+void renderRemindEveryUI() {
+    v2 wres = getScreenRes();
+    v2 res = _v2(25, 9);
+    v2 row = _v2(0, 1);
+    v2 pos = v2sub(wres, res);
+    setCursor(pos);
+
+    printf("*-------[ 1 / 3 ]-------*");
+    pos = v2add(pos, row); setCursor(pos);
+    printf("   Delay:                ");
+    pos = v2add(pos, row); setCursor(pos);
+
+    // printf("\e[48;5;%sm", STYLE_VISUAL_SELECTED); printf("\e[38;5;0m");
+    // printf("\e[0m");
+
+    char *delayHC = s.remindEveryUI.selected == &s.remindEveryUI.delayH ? "\e[48;5;255m\e[38;5;0m" : "";
+    char *delayMinC = s.remindEveryUI.selected == &s.remindEveryUI.delayMin ? "\e[48;5;255m\e[38;5;0m" : "";
+    char *delaySC = s.remindEveryUI.selected == &s.remindEveryUI.delayS ? "\e[48;5;255m\e[38;5;0m" : "";
+
+    char *delayDC = s.remindEveryUI.selected == &s.remindEveryUI.delayD ? "\e[48;5;255m\e[38;5;0m" : "";
+    char *delayMC = s.remindEveryUI.selected == &s.remindEveryUI.delayM ? "\e[48;5;255m\e[38;5;0m" : "";
+    char *delayYC = s.remindEveryUI.selected == &s.remindEveryUI.delayY ? "\e[48;5;255m\e[38;5;0m" : "";
+
+    char *offsetHC = s.remindEveryUI.selected == &s.remindEveryUI.offsetH ? "\e[48;5;255m\e[38;5;0m" : "";
+    char *offsetMinC = s.remindEveryUI.selected == &s.remindEveryUI.offsetMin ? "\e[48;5;255m\e[38;5;0m" : "";
+    char *offsetSC = s.remindEveryUI.selected == &s.remindEveryUI.offsetS ? "\e[48;5;255m\e[38;5;0m" : "";
+
+    char *offsetDC = s.remindEveryUI.selected == &s.remindEveryUI.offsetD ? "\e[48;5;255m\e[38;5;0m" : "";
+    char *offsetMC = s.remindEveryUI.selected == &s.remindEveryUI.offsetM ? "\e[48;5;255m\e[38;5;0m" : "";
+    char *offsetYC = s.remindEveryUI.selected == &s.remindEveryUI.offsetY ? "\e[48;5;255m\e[38;5;0m" : "";
+
+
+    printf("    [%s%02d\e[0m]h [%s%02d\e[0m]m [%s%02d\e[0m]s    ", delayHC, s.remindEveryUI.delayH.uiInt.value, delayMinC, s.remindEveryUI.delayMin.uiInt.value, delaySC, s.remindEveryUI.delayS.uiInt.value);
+    pos = v2add(pos, row); setCursor(pos);
+
+    printf("    [%s%02d\e[0m]d [%s%02d\e[0m]m [%s%02d\e[0m]y    ", delayDC, s.remindEveryUI.delayD.uiInt.value, delayMC, s.remindEveryUI.delayM.uiInt.value, delayYC, s.remindEveryUI.delayY.uiInt.value);
+    pos = v2add(pos, row); setCursor(pos);
+
+    printf("                         ");
+    pos = v2add(pos, row); setCursor(pos);
+    printf("   Offset:               ");
+    pos = v2add(pos, row); setCursor(pos);
+
+    printf("    [%s%02d\e[0m]h [%s%02d\e[0m]m [%s%02d\e[0m]s    ", offsetHC, s.remindEveryUI.offsetH.uiInt.value, offsetMinC, s.remindEveryUI.offsetMin.uiInt.value, offsetSC, s.remindEveryUI.offsetS.uiInt.value);
+    pos = v2add(pos, row); setCursor(pos);
+
+    printf("    [%s%02d\e[0m]d [%s%02d\e[0m]m [%s%04d\e[0m]y  ", offsetDC, s.remindEveryUI.offsetD.uiInt.value, offsetMC, s.remindEveryUI.offsetM.uiInt.value, offsetYC, s.remindEveryUI.offsetY.uiInt.value);
+    pos = v2add(pos, row); setCursor(pos);
+
+    printf("*-----------------------*");
+    pos = v2add(pos, row); setCursor(pos);
+}
 
 int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, bool visual, int vStart, int vEnd, bool init);
 
 void render() {
     renderPlanItem(s.root, 0, 0, s.selectedIndex, s.mode == VISUAL_MODE, s.vStart, s.vEnd, true);
+
+    // renderRemindEveryUI();
 }
 
 int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, bool visual, int vStart, int vEnd, bool init) {
@@ -121,6 +296,10 @@ void interactive() {
     tcgetattr(STDIN_FILENO, &restore);
     term.c_lflag &= ~(ICANON | ECHO);
     tcsetattr(STDIN_FILENO, TCSANOW, &term);
+
+    struct sigaction sa;
+    sa.sa_handler = render;
+    sigaction(SIGWINCH, &sa, NULL);
 #elif _WIN32
     DWORD term, restore;
     HANDLE console = GetStdHandle(STD_INPUT_HANDLE);
@@ -134,6 +313,7 @@ void interactive() {
     setbuf(stdout, NULL);
     setbuf(stdin, NULL);
 
+    setupRemindEveryUI();
 
     saveScreen();
     invisibleCursorOn();
@@ -370,6 +550,9 @@ void interactive() {
                 }
             }
             // TODO: implement copy 'y'
+        }
+        else if(s.mode == PROMPT_MODE) {
+            inputRemindEveryUI(input);
         }
     }
 

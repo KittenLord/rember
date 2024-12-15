@@ -41,6 +41,10 @@ v2 v2add(v2 a, v2 b) {
     return _v2(a.x + b.x, a.y + b.y);
 }
 
+v2 v2sub(v2 a, v2 b) {
+    return _v2(a.x - b.x, a.y - b.y);
+}
+
 void setCursor(v2 p) {
     printf("\e[%d;%dH", p.row + 1, p.col + 1);
 }

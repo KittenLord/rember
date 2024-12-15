@@ -234,7 +234,7 @@ PlanItem *findPlanItem(PlanItem *item, bool (*pred)(PlanItem *, void *), void *d
 
 bool isDone(PlanItem *item);
 
-void fe_constant(PlanItem *item, void *amount) { (*(int *)amount)++; }
+void fe_constant(PlanItem *item, void *amount) { item = item; (*(int *)amount)++; }
 void fe_ifDone(PlanItem *item, void *amount) { if(isDone(item)) (*(int *)amount)++; }
 
 int getAmountOfChildren(PlanItem *item) {
