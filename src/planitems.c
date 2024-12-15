@@ -278,6 +278,7 @@ PlanItem *getFirstItemSafe(PlanItem *root) {
 }
 
 PlanItem *getLastSameNest(PlanItem *item) {
+    if(!item) return item;
     if(!item->next) return item;
     return getLastSameNest(item->next);
 }
@@ -330,6 +331,11 @@ int getPlanItemIndex(PlanItem *root, PlanItem *target) {
     int result = -1;
     __getPlanItemIndex(root->children, target, 0, &result);
     return result;
+}
+
+int getIndexOfLastChild(PlanItem *root, PlanItem *item) {
+    if(item && item->children) item = getLastSameNest(item->children);
+    return getPlanItemIndex(root, item);
 }
 
 PlanItem *removeSelection(PlanItem *root, int vStart, int vEnd) {

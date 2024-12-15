@@ -12,6 +12,7 @@ int clamp(int n, int a, int b) {
 int wrap(int n, int a, int b) {
     if(n < a) return wrap(b + (n - a), a, b);
     if(n >= b) return wrap(a + (n - b), a, b);
+    return n;
 }
 
 void ctob(char c, char buf[8]) {

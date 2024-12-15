@@ -368,7 +368,6 @@ void interactive() {
                 if(selected->children) index = getPlanItemIndex(s.root, getLastSameNest(selected->children));
                 if(s.selectedIndex > s.vEnd) s.vEnd = index;
             }
-            // TODO: if an item with children gets selected, visually select all children
             if(input == 'k') {
                 PlanItem *previous = getItemBefore(s.root, selected);
                 if(!previous) continue;
@@ -378,6 +377,9 @@ void interactive() {
                 s.selectedIndex = previousIndex;
                 selected = previous;
                 if(s.selectedIndex < s.vStart) s.vStart = s.selectedIndex;
+
+                int lastIndex = getIndexOfLastChild(s.root, selected);
+                if(lastIndex > s.vEnd) s.vEnd = lastIndex;
             }
             if(input == 'd') {
                 PlanItem *item = getPlanItemAtIndex(s.root, s.vStart);
