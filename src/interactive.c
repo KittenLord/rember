@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
 
 #include <assert.h>
 #ifdef __linux__
@@ -285,6 +286,13 @@ void interactive() {
             }
             if(input == KEY_ENTER) {
                 selected->done = !selected->done;
+
+                if(selected->done) {
+                    selected->lastCheckedStaged = time(NULL);
+                }
+                else {
+                    selected->lastCheckedStaged = selected->remindInfo.lastChecked;
+                }
             }
         }
         // TODO: fix for cyrillic (and unicode in general)

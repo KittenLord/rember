@@ -8,13 +8,34 @@
 #include <assert.h>
 #include <stdint.h>
 
-typedef enum {
-    RemindNone,
+#define RemindNone 0
+#define RemindEvery 1
+#define RemindWeekday 2
+#define RemindMonthday 3
 
-    RemindEvery,
-    RemindWeekday,
-    RemindMonthday,
-} RemindType;
+// not sure if this is needed
+#define W_SUN_BIT 0b00000001
+#define W_MON_BIT 0b00000010
+#define W_TUE_BIT 0b00000100
+#define W_WED_BIT 0b00001000
+#define W_THU_BIT 0b00010000
+#define W_FRI_BIT 0b00100000
+#define W_SAT_BIT 0b01000000
+
+#define M_JAN_BIT 0b000000000001
+#define M_FEB_BIT 0b000000000010
+#define M_MAR_BIT 0b000000000100
+#define M_APR_BIT 0b000000001000
+#define M_MAY_BIT 0b000000010000
+#define M_JUN_BIT 0b000000100000
+#define M_JUL_BIT 0b000001000000
+#define M_AUG_BIT 0b000010000000
+#define M_SEP_BIT 0b000100000000
+#define M_OCT_BIT 0b001000000000
+#define M_NOV_BIT 0b010000000000
+#define M_DEC_BIT 0b100000000000
+
+typedef char RemindType;
 
 typedef struct {
     RemindType type;
@@ -22,6 +43,7 @@ typedef struct {
 
     union {
         struct {
+            time_t offset;
             time_t delay;
         } every;
 
@@ -56,6 +78,7 @@ struct PlanItem {
     // Runtime
     size_t capacity;
     bool collapsed;
+    time_t lastCheckedStaged;
 };
 
 void freePlanItem(PlanItem *item, bool freeNext) {
@@ -72,9 +95,15 @@ void freePlanItem(PlanItem *item, bool freeNext) {
     entry ::= (TextLength :: u8)
               (Text :: String[TextLength]) 
               (IsDone :: u8 (Bool))  
+              maybeTime
               maybeChild
               maybeNext
               (NO_ITEM :: u8)
+
+    maybeTime ::= (TIME_FLAG :: u8)
+                  time
+
+                | e
 
     maybeChild ::= (CHILD_ITEM :: u8)
                    entry
@@ -112,10 +141,11 @@ PlanItem *parsePlanItem(char **data) {
     char control = *((*data)++);
     #define ifControl(flag, block) if(control == flag) { block; control = *((*data)++); }
 
-    ifControl(NO_ITEM, { return this; });
+    // ifControl(NO_ITEM, { return this; });
     ifControl(TIME_FLAG, {
         memcpy(&(this->remindInfo), *data, sizeof(RemindTimeInfo));
         *data += sizeof(RemindTimeInfo);
+        this->lastCheckedStaged = this->remindInfo.lastChecked;
     });
     ifControl(CHILD_ITEM, { this->children = parsePlanItem(data); });
     ifControl(NEXT_ITEM, { this->next = parsePlanItem(data); });
@@ -129,11 +159,15 @@ PlanItem *parsePlanItem(char **data) {
 // automatically writes \r\n instead (cuz I found 0x0D0A in xxd), but
 // regardless, I'll look into this later
 void writePlanItem(PlanItem *item, FILE *file) {
+    // Commit all temporary changes
+    item->remindInfo.lastChecked = item->lastCheckedStaged;
+
     char len = *(char *)(&(item->len));
     fwrite(&len, sizeof(char), 1, file);
     fwrite(item->text, sizeof(char), len, file);
     fwrite(&item->done, sizeof(char), 1, file);
 
+    // I wonder if there's a better solution to writing a constant to a file
     char noItem = NO_ITEM;
     char nextItem = NEXT_ITEM;
     char childItem = CHILD_ITEM;
@@ -148,8 +182,27 @@ void writePlanItem(PlanItem *item, FILE *file) {
 
 
 
+
+
 // TODO: some of these need to be rewritten or refactored into a more useful API
 
+bool isExpired(PlanItem *item, time_t now) {
+    struct tm *date;
+    time_t t;
+
+    if(item->remindInfo.type == RemindNone) return false;
+    else if(item->remindInfo.type == RemindEvery) {
+        return (now - item->remindInfo.lastChecked) > item->remindInfo.every.delay;
+    }
+    else if(item->remindInfo.type == RemindWeekday) {
+
+    }
+    else if(item->remindInfo.type == RemindMonthday) {
+
+    }
+
+    return false;
+}
 
 void foreachPlanItem(PlanItem *item, void (*fn)(PlanItem *, void *), void *data) {
     if(!item) return;
