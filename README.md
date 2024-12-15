@@ -40,7 +40,7 @@ w - save
 - Can't exit visual and insert mode using Escape key on Windows
 
 # TODO:
-- [~] Windows support (shouldn't be too hard [clueless])
+- [x] Windows support (shouldn't be too hard [clueless])
 - [ ] Configuration/customization
 - [ ] Actually do something when a line is too long
 - [ ] Recurring tasks
