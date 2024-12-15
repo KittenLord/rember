@@ -2,7 +2,41 @@
 #define __REMBER_PLANITEMS_C
 
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <assert.h>
+#include <stdint.h>
+
+typedef enum {
+    RemindNone,
+
+    RemindEvery,
+    RemindWeekday,
+    RemindMonthday,
+} RemindType;
+
+typedef struct {
+    RemindType type;
+    time_t lastChecked;
+
+    union {
+        struct {
+            time_t delay;
+        } every;
+
+        struct {
+            char weekdayBitmap;
+            time_t timeOfDay;
+        } weekday;
+
+        struct {
+            uint32_t monthdayBitmap;
+            uint16_t monthBitmap;
+            time_t timeOfDay;
+        } monthday;
+    };
+} RemindTimeInfo;
 
 typedef struct PlanItem PlanItem;
 
@@ -11,15 +45,17 @@ typedef struct PlanItem PlanItem;
 // Option B: remind every selected weekday at particular time
 // Option C: remind every selected month at every selected date at particular time
 struct PlanItem {
-    char *text;
+    // Serialized
     size_t len;
+    char *text;
     bool done;
-
-    size_t capacity;
-    bool collapsed;
-
+    RemindTimeInfo remindInfo;
     PlanItem *children;
     PlanItem *next;
+
+    // Runtime
+    size_t capacity;
+    bool collapsed;
 };
 
 void freePlanItem(PlanItem *item, bool freeNext) {
@@ -52,9 +88,11 @@ void freePlanItem(PlanItem *item, bool freeNext) {
 
 */
 
-#define NO_ITEM 0
-#define NEXT_ITEM 1
-#define CHILD_ITEM 2
+#define NO_ITEM 0x00
+#define NEXT_ITEM 0x01
+#define CHILD_ITEM 0x02
+
+#define TIME_FLAG 0x0A
 
 // this will ABSOLUTELY explode if it encounters bad data btw
 PlanItem *parsePlanItem(char **data) {
@@ -70,12 +108,18 @@ PlanItem *parsePlanItem(char **data) {
     *data += text_len;
 
     this->done = !!*((*data)++);
+
     char control = *((*data)++);
+    #define ifControl(flag, block) if(control == flag) { block; control = *((*data)++); }
 
-    if(control == NO_ITEM) return this;
+    ifControl(NO_ITEM, { return this; });
+    ifControl(TIME_FLAG, {
+        memcpy(&(this->remindInfo), *data, sizeof(RemindTimeInfo));
+        *data += sizeof(RemindTimeInfo);
+    });
+    ifControl(CHILD_ITEM, { this->children = parsePlanItem(data); });
+    ifControl(NEXT_ITEM, { this->next = parsePlanItem(data); });
 
-    if(control == CHILD_ITEM) { this->children = parsePlanItem(data); control = *((*data)++); }
-    if(control == NEXT_ITEM) { this->next = parsePlanItem(data); control = *((*data)++); }
     assert(control == NO_ITEM);
     return this;
 }
@@ -93,11 +137,25 @@ void writePlanItem(PlanItem *item, FILE *file) {
     char noItem = NO_ITEM;
     char nextItem = NEXT_ITEM;
     char childItem = CHILD_ITEM;
+    char timeFlag = TIME_FLAG;
 
+    if(item->remindInfo.type != RemindNone) { fwrite(&timeFlag, sizeof(char), 1, file); fwrite(&item->remindInfo, sizeof(RemindTimeInfo), 1, file); }
     if(item->children) { fwrite(&childItem, sizeof(char), 1, file); writePlanItem(item->children, file); }
     if(item->next) { fwrite(&nextItem, sizeof(char), 1, file); writePlanItem(item->next, file); }
     fwrite(&noItem, sizeof(char), 1, file);
     return;
+}
+
+
+
+// TODO: some of these need to be rewritten or refactored into a more useful API
+
+
+void foreachPlanItem(PlanItem *item, void (*fn)(PlanItem *, void *), void *data) {
+    if(!item) return;
+    fn(item, data);
+    foreachPlanItem(item->children, fn, data);
+    foreachPlanItem(item->next, fn, data);
 }
 
 int getAmountOfDoneChildren(PlanItem *item);

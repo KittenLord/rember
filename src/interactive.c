@@ -7,8 +7,8 @@
 #include <sys/stat.h>
 #include <stdbool.h>
 #include <string.h>
-#include <assert.h>
 
+#include <assert.h>
 #ifdef __linux__
 #include <termios.h>
 #include <sys/ioctl.h>
