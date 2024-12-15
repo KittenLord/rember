@@ -9,6 +9,11 @@ int clamp(int n, int a, int b) {
     return n;
 }
 
+int wrap(int n, int a, int b) {
+    if(n < a) return wrap(b + (n - a), a, b);
+    if(n >= b) return wrap(a + (n - b), a, b);
+}
+
 void ctob(char c, char buf[8]) {
     for(int i = 0; i < 8; i++) { buf[i] = ((c >> (8 - i - 1)) & 1) + '0'; }
 }
