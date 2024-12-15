@@ -47,7 +47,7 @@ void setupRemindEveryUI(void *reuip) {
     reui->selected = reui->initial;
 
     verticalUIBond4((*reui), delayH, delayD, offsetH, offsetD);
-    verticalUIBond4((*reui), delayMin, delayM, offsetMin, offsetY);
+    verticalUIBond4((*reui), delayMin, delayM, offsetMin, offsetM);
     verticalUIBond4((*reui), delayS, delayY, offsetS, offsetY);
 
     horizontalUIBond3((*reui), delayH, delayMin, delayS);
