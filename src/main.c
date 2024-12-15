@@ -5,15 +5,16 @@
 #include "planitems.c"
 #include "interactive.c"
 
+#define SUB_INTERACTIVE "interactive"
+
 int main(int argc, char **argv) {
-    
-    struct tm currentTime;
-    time_t currentTimeT = time(NULL);
+    char *subcommand = SUB_INTERACTIVE;
 
-    gmtime_r(&currentTimeT, &currentTime);
+    for(int i = 1; i < argc; i++) {
+        printf("%s\n", argv[i]);
+    }
 
-
-    // printf("%d-%d-%d, %dh %dn %ds\n", currentTime.tm_year + 1900, currentTime.tm_mon, currentTime.tm_mday, currentTime.tm_hour, currentTime.tm_min, currentTime.tm_sec);
-
-    interactive();
+    if(!strcmp(subcommand, SUB_INTERACTIVE)) {
+        interactive();
+    }
 }
