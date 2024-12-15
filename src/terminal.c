@@ -27,4 +27,4 @@ void invisibleCursorOn() {
     printf("\e[?25l");
 }
 
-#endif
+#endif // __REMBER_TERMINAL_C

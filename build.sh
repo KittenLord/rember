@@ -1,1 +1,1 @@
-gcc ./src/main.c -o ./bin/rember -ggdb -Wall -Wextra && ./bin/rember
+gcc ./src/main.c -o ./out/rember -ggdb -Wall -Wextra && ./out/rember
