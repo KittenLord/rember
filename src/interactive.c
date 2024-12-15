@@ -35,6 +35,8 @@
 #define KEY_ENTER 0x0D
 #endif
 
+#define KEY_TAB 0x09
+
 // a very bad solution, but idk how to fix this atm
 #ifdef __linux__
 #define KEY_ESCAPE '\e'
@@ -48,6 +50,26 @@
 #define STYLE_NOTDONE "255"
 #define STYLE_VISUAL "75"
 #define STYLE_VISUAL_SELECTED "87"
+
+#define NORMAL_MODE 0
+#define INSERT_MODE 1
+#define VISUAL_MODE 2
+
+struct InteractiveState {
+    PlanItem *root;
+    char mode;
+    int selectedIndex;
+
+    int vStart;
+    int vEnd;
+};
+struct InteractiveState s;
+
+int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, bool visual, int vStart, int vEnd, bool init);
+
+void render() {
+    renderPlanItem(s.root, 0, 0, s.selectedIndex, s.mode == VISUAL_MODE, s.vStart, s.vEnd, true);
+}
 
 int renderPlanItem(PlanItem *item, int indent, int index, int selectedIndex, bool visual, int vStart, int vEnd, bool init) {
     if(init) { eraseScreen(); goto00(); if(item->children) renderPlanItem(item->children, 0, 0, selectedIndex, visual, vStart, vEnd, false); return 0; }
@@ -132,7 +154,6 @@ void interactive() {
     bool new = false;
     if(!savefile) { new = true; savefile = fopen("./planner.txt", "wb+"); }
 
-    PlanItem *root;
     if(!new) {
         fseek(savefile, 0, SEEK_END);
         size_t len = ftell(savefile);
@@ -140,38 +161,34 @@ void interactive() {
         char *buffer = malloc(len);
         fread(buffer, sizeof(char), len, savefile);
         char *tempBuf = buffer;
-        root = parsePlanItem(&tempBuf);
+        s.root = parsePlanItem(&tempBuf);
         free(buffer);
     } 
     else {
         #define ROOT_NAME "ROOT"
         #define ROOT_LEN 4
-        root = calloc(1, sizeof(PlanItem));
-        root->text = malloc(ROOT_LEN);
-        root->len = ROOT_LEN;
-        root->capacity = ROOT_LEN; // not necessary
-        memcpy(root->text, ROOT_NAME, ROOT_LEN);
-        writePlanItem(root, savefile);
+        s.root = calloc(1, sizeof(PlanItem));
+        s.root->text = malloc(ROOT_LEN);
+        s.root->len = ROOT_LEN;
+        s.root->capacity = ROOT_LEN; // not necessary
+        memcpy(s.root->text, ROOT_NAME, ROOT_LEN);
+        writePlanItem(s.root, savefile);
     }
 
     fclose(savefile);
 
-    PlanItem *selected = root;
-    int selectedIndex = 0;
+    PlanItem *selected = s.root;
+    s.selectedIndex = 0;
 
     PlanItem *copyBuffer = NULL;
 
     char input;
     char buf[9] = "xxxxxxxx\0";
 
-    int visualSelectionStart = -1;
-    int visualSelectionEnd = -1;
+    s.vStart = -1;
+    s.vEnd = -1;
 
-    #define NORMAL_MODE 0
-    #define INSERT_MODE 1
-    #define VISUAL_MODE 2
-
-    int mode = NORMAL_MODE;
+    s.mode = NORMAL_MODE;
 
     bool doSave = true;
 
@@ -182,7 +199,7 @@ void interactive() {
 
     int iteration = 0;
     while(true) { 
-        renderPlanItem(root, 0, 0, selectedIndex, mode == VISUAL_MODE, visualSelectionStart, visualSelectionEnd, true);
+        render();
 
         if(simulatedInputLen == 0) {
             read(STDIN_FILENO, &input, 1);
@@ -194,17 +211,17 @@ void interactive() {
         }
 
         ctob(input, buf);
-        log("SELECTED INDEX: %d\n", selectedIndex);
-        log("AMOUNT: %d\n", getPlanItemAmount(root));
-        log("ROOT NEXT: %p\n", root->next);
+        log("SELECTED INDEX: %d\n", s.selectedIndex);
+        log("AMOUNT: %d\n", getAmountOfChildren(s.root));
+        log("ROOT NEXT: %p\n", s.root->next);
         log("KEY: %s\n", buf);
         log("ITERATION: %d\n", ++iteration);
 
-        if(mode == NORMAL_MODE) {
+        if(s.mode == NORMAL_MODE) {
             // maybe auto-saving shouldn't be the default?
             if(input == 'q') break;
             if(input == 'Q') { doSave = false; break; }
-            if(input == 'o' && selected == root) input = 'a';
+            if(input == 'o' && selected == s.root) input = 'a';
             if(input == 'a') {
                 PlanItem *child = calloc(1, sizeof(PlanItem));
                 child->text = calloc(16, sizeof(char));
@@ -213,8 +230,8 @@ void interactive() {
                 child->next = selected->children;
                 selected->children = child;
                 selected = child;
-                selectedIndex = getPlanItemIndex(root, selected);
-                mode = INSERT_MODE;
+                s.selectedIndex = getPlanItemIndex(s.root, selected);
+                s.mode = INSERT_MODE;
             }
             if(input == 'o') {
                 PlanItem *nnext = calloc(1, sizeof(PlanItem));
@@ -224,47 +241,45 @@ void interactive() {
                 nnext->next = selected->next;
                 selected->next = nnext;
                 selected = nnext;
-                selectedIndex = getPlanItemIndex(root, selected);
-                mode = INSERT_MODE;
+                s.selectedIndex = getPlanItemIndex(s.root, selected);
+                s.mode = INSERT_MODE;
             }
             if(input == 'j') {
                 // TODO: This should count ONLY visible ones
-                int amount = getPlanItemAmount(root);
-                selectedIndex = clamp(selectedIndex + 1, 0, amount);
-                selected = getPlanItemAtIndex(root, selectedIndex);
+                int amount = getTotalAmount(s.root);
+                s.selectedIndex = clamp(s.selectedIndex + 1, 0, amount);
+                selected = getPlanItemAtIndex(s.root, s.selectedIndex);
             }
             if(input == 'k') {
-                int amount = getPlanItemAmount(root);
-                selectedIndex = clamp(selectedIndex - 1, 0, amount);
-                selected = getPlanItemAtIndex(root, selectedIndex);
+                int amount = getTotalAmount(s.root);
+                s.selectedIndex = clamp(s.selectedIndex - 1, 0, amount);
+                selected = getPlanItemAtIndex(s.root, s.selectedIndex);
             }
-            // TODO: cancel on \e
             if(input == 'c') {
                 selected->len = 0;
-                mode = INSERT_MODE;
+                s.mode = INSERT_MODE;
             }
-            // this is actually identical to "vd", wonder if I can do something about it...
             if(input == 'd') {
                 simulate("vd");
             }
             if(input == 'w') {
                 savefile = fopen("./planner.txt", "wb+");
-                writePlanItem(root, savefile);
+                writePlanItem(s.root, savefile);
                 fclose(savefile);
             }
             if(input == 'v') {
-                mode = VISUAL_MODE;
-                visualSelectionStart = selectedIndex;
-                visualSelectionEnd = selectedIndex;
+                s.mode = VISUAL_MODE;
+                s.vStart = s.selectedIndex;
+                s.vEnd = s.selectedIndex;
             }
-            if(input == 'p' && selected == root) { input = 'P'; }
+            if(input == 'p' && selected == s.root) { input = 'P'; }
             if(input == 'p') {
                 if(!copyBuffer) continue;
                 PlanItem *lastSameNest = getLastSameNest(copyBuffer);
                 lastSameNest->next = selected->next;
                 selected->next = copyBuffer;
 
-                selectedIndex = getPlanItemIndex(root, copyBuffer);
+                s.selectedIndex = getPlanItemIndex(s.root, copyBuffer);
                 selected = copyBuffer;
 
                 copyBuffer = planItemDeepCopy(copyBuffer, true);
@@ -275,12 +290,12 @@ void interactive() {
                 if(lastSameNest) lastSameNest->next = selected->children;
                 selected->children = copyBuffer;
 
-                selectedIndex = getPlanItemIndex(root, copyBuffer);
+                s.selectedIndex = getPlanItemIndex(s.root, copyBuffer);
                 selected = copyBuffer;
 
                 copyBuffer = planItemDeepCopy(copyBuffer, true);
             }
-            if(input == 0x09) {
+            if(input == KEY_TAB) {
                 if(selected->children) selected->collapsed = !selected->collapsed;
                 else                   selected->collapsed = false;
             }
@@ -298,8 +313,8 @@ void interactive() {
         // TODO: fix for cyrillic (and unicode in general)
 
         // TODO: cancel input
-        else if(mode == INSERT_MODE) {
-            if(input == KEY_ENTER) { if(selected->len > 0) { mode = NORMAL_MODE; } continue; }
+        else if(s.mode == INSERT_MODE) {
+            if(input == KEY_ENTER) { if(selected->len > 0) { s.mode = NORMAL_MODE; } continue; }
             if(input == KEY_BACKSPACE) { if(selected->len > 0) selected->len--; continue; }
 
             if(selected->len >= selected->capacity) {
@@ -308,54 +323,50 @@ void interactive() {
             }
             selected->text[(selected->len)++] = input;
         }
-        else if(mode == VISUAL_MODE) {
+        else if(s.mode == VISUAL_MODE) {
             // currently doesn't work on windows, and i'm not sure why...
-            if(input == KEY_ESCAPE) { mode = NORMAL_MODE; }
-            if(input == 'v') { mode = NORMAL_MODE; }
+            if(input == KEY_ESCAPE) { s.mode = NORMAL_MODE; }
+            if(input == 'v') { s.mode = NORMAL_MODE; }
             if(input == 'j') {
-                // TODO: if an item with children gets selected, visually select all children
                 if(!selected->next) continue;
-                selectedIndex = getPlanItemIndex(root, selected->next);
+                s.selectedIndex = getPlanItemIndex(s.root, selected->next);
                 selected = selected->next;
-                if(selectedIndex > visualSelectionEnd) visualSelectionEnd = selectedIndex;
+                int index = s.selectedIndex;
+                if(selected->children) index = getPlanItemIndex(s.root, getLastSameNest(selected->children));
+                if(s.selectedIndex > s.vEnd) s.vEnd = index;
             }
+            // TODO: if an item with children gets selected, visually select all children
             if(input == 'k') {
-                PlanItem *previous = getPreviousItemVisual(root, selected);
+                PlanItem *previous = getItemBefore(s.root, selected);
                 if(!previous) continue;
-                if(previous == root) continue;
-                int previousIndex = getPlanItemIndex(root, previous);
+                if(previous == s.root) continue;
+                int previousIndex = getPlanItemIndex(s.root, previous);
                 // bool isParent = previous->children == selected;
-                selectedIndex = previousIndex;
+                s.selectedIndex = previousIndex;
                 selected = previous;
-                if(selectedIndex < visualSelectionStart) visualSelectionStart = selectedIndex;
+                if(s.selectedIndex < s.vStart) s.vStart = s.selectedIndex;
             }
-            // hopefully fixed
             if(input == 'd') {
-                PlanItem *item = getPlanItemAtIndex(root, visualSelectionStart);
-                if(item == root) {
+                PlanItem *item = getPlanItemAtIndex(s.root, s.vStart);
+                if(item == s.root) {
                     simulate("v");
                     continue;
                 }
 
-                PlanItem *previous = getPreviousItemVisual(root, item);
+                PlanItem *previous = getItemBefore(s.root, item);
 
-                PlanItem *removed = removeSelection(root, visualSelectionStart, visualSelectionEnd);
+                PlanItem *removed = removeSelection(s.root, s.vStart, s.vEnd);
                 freePlanItem(copyBuffer, true);
                 copyBuffer = removed;
-                mode = NORMAL_MODE;
+                s.mode = NORMAL_MODE;
 
                 if(previous) {
                     selected = previous;
-                    selectedIndex = getPlanItemIndex(root, previous);
+                    s.selectedIndex = getPlanItemIndex(s.root, previous);
                 }
                 else {
-                    selectedIndex = 0;
-                    selected = getPlanItemAtIndex(root, selectedIndex);
-                }
-
-                if(!selected || selectedIndex == -1) {
-                    selected = root;
-                    selectedIndex = 0;
+                    selected = getFirstItemSafe(s.root);
+                    s.selectedIndex = 0;
                 }
             }
             // TODO: implement copy 'y'
@@ -364,7 +375,7 @@ void interactive() {
 
     if(doSave) { 
         savefile = fopen("./planner.txt", "wb+");
-        writePlanItem(root, savefile);
+        writePlanItem(s.root, savefile);
         fclose(savefile);
     }
 

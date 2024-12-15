@@ -180,12 +180,6 @@ void writePlanItem(PlanItem *item, FILE *file) {
     return;
 }
 
-
-
-
-
-// TODO: some of these need to be rewritten or refactored into a more useful API
-
 bool isExpired(PlanItem *item, time_t now) {
     struct tm *date;
     time_t t;
@@ -204,6 +198,7 @@ bool isExpired(PlanItem *item, time_t now) {
     return false;
 }
 
+// I HECKIN LOVE RECURSION!!!
 void foreachPlanItem(PlanItem *item, void (*fn)(PlanItem *, void *), void *data) {
     if(!item) return;
     fn(item, data);
@@ -211,15 +206,53 @@ void foreachPlanItem(PlanItem *item, void (*fn)(PlanItem *, void *), void *data)
     foreachPlanItem(item->next, fn, data);
 }
 
-int getAmountOfDoneChildren(PlanItem *item);
-
-int getAmountSameNest(PlanItem *item) {
-    if(!item) return 0;
-    return 1 + getAmountSameNest(item->next);
+void foreachChildPlanItem(PlanItem *item, void (*fn)(PlanItem *, void *), void *data) {
+    if(!item) return;
+    foreachPlanItem(item->children, fn, data);
 }
 
+void foreachNextPlanItem(PlanItem *item, void (*fn)(PlanItem *, void *), void *data) {
+    if(!item) return;
+    fn(item, data);
+    foreachNextPlanItem(item->next, fn, data);
+}
+
+void foreachDirectChildPlanItem(PlanItem *item, void (*fn)(PlanItem *, void *), void *data) {
+    if(!item) return;
+    foreachNextPlanItem(item->children, fn, data);
+}
+
+PlanItem *findPlanItem(PlanItem *item, bool (*pred)(PlanItem *, void *), void *data) {
+    if(!item) return NULL;
+    if(pred(item, data)) return item;
+
+    PlanItem *result = NULL;
+    result = findPlanItem(item->children, pred, data);
+    if(!result) result = findPlanItem(item->next, pred, data);
+    return result;
+}
+
+bool isDone(PlanItem *item);
+
+void fe_constant(PlanItem *item, void *amount) { (*(int *)amount)++; }
+void fe_ifDone(PlanItem *item, void *amount) { if(isDone(item)) (*(int *)amount)++; }
+
 int getAmountOfChildren(PlanItem *item) {
-    return getAmountSameNest(item->children);
+    int amount = 0;
+    foreachDirectChildPlanItem(item, fe_constant, &amount);
+    return amount;
+}
+
+int getTotalAmount(PlanItem *root) {
+    int amount = 0;
+    foreachChildPlanItem(root, fe_constant, &amount);
+    return amount;
+}
+
+int getAmountOfDoneChildren(PlanItem *item) {
+    int amount = 0;
+    foreachDirectChildPlanItem(item, fe_ifDone, &amount);
+    return amount;
 }
 
 bool isDone(PlanItem *item) {
@@ -229,25 +262,43 @@ bool isDone(PlanItem *item) {
     return doneChildren >= children;
 }
 
-int getAmountOfDoneSameNest(PlanItem *item) {
-    if(!item) return 0;
-    return isDone(item) + getAmountOfDoneSameNest(item->next);
+bool find_isBefore(PlanItem *item, void *vtarget) { 
+    PlanItem *target = vtarget;
+    return item->children == target || item->next == target;
 }
 
-int getAmountOfDoneChildren(PlanItem *item) {
-    return getAmountOfDoneSameNest(item->children);
+PlanItem *getItemBefore(PlanItem *root, PlanItem *target) {
+    return findPlanItem(root, find_isBefore, target);
 }
 
-int __getPlanItemAmount(PlanItem *current) {
-    if(!current) return 0;
-    int amount = 1;
-    amount += __getPlanItemAmount(current->children);
-    amount += __getPlanItemAmount(current->next);
-    return amount;
+PlanItem *getFirstItemSafe(PlanItem *root) {
+    if(!root) return NULL;
+    if(root->children) return root->children;
+    return root;
 }
 
-int getPlanItemAmount(PlanItem *root) {
-    return __getPlanItemAmount(root) - 1;
+PlanItem *getLastSameNest(PlanItem *item) {
+    if(!item->next) return item;
+    return getLastSameNest(item->next);
+}
+
+PlanItem *planItemDeepCopy(PlanItem *base, bool cloneNext) {
+    if(!base) return NULL;
+
+    PlanItem *clone = malloc(sizeof(PlanItem));
+    clone->len = base->len;
+    clone->capacity = base->capacity;
+    clone->text = malloc(clone->len);
+    clone->done = base->done;
+    clone->collapsed = false;
+    memcpy(clone->text, base->text, clone->len);
+
+    clone->children = NULL;
+    clone->next = NULL;
+
+    clone->children = planItemDeepCopy(base->children, true);
+    if(cloneNext) clone->next = planItemDeepCopy(base->next, true);
+    return clone;
 }
 
 int __getPlanItemAtIndex(PlanItem *current, PlanItem **result, int index, int currentIndex) {
@@ -281,28 +332,11 @@ int getPlanItemIndex(PlanItem *root, PlanItem *target) {
     return result;
 }
 
-PlanItem *__getPreviousItemVisual(PlanItem *current, PlanItem *targetNext) {
-    if(!current) return NULL;
-    if(current->children == targetNext) return current;
-    if(current->next == targetNext) return current;
-    PlanItem *next = NULL;
-    if(current->children) next = __getPreviousItemVisual(current->children, targetNext);
-    if(next) return next;
-    if(current->next) next = __getPreviousItemVisual(current->next, targetNext);
-    return next;
-}
-
-PlanItem *getPreviousItemVisual(PlanItem *root, PlanItem *targetNext) {
-    if(targetNext == root->children) return root;
-    if(targetNext == root->next) return root;
-    return __getPreviousItemVisual(root->children, targetNext);
-}
-
 PlanItem *removeSelection(PlanItem *root, int vStart, int vEnd) {
     PlanItem *item = getPlanItemAtIndex(root, vStart);
     PlanItem *search = item;
 
-    PlanItem *parent = getPreviousItemVisual(root, item);
+    PlanItem *parent = getItemBefore(root, item);
 
     PlanItem *replace = NULL;
     while(search->next) {
@@ -314,30 +348,6 @@ PlanItem *removeSelection(PlanItem *root, int vStart, int vEnd) {
     if(parent->next == item) { parent->next = replace; }
     else if(parent->children == item) { parent->children = replace; }
     return item;
-}
-
-PlanItem *getLastSameNest(PlanItem *item) {
-    if(!item->next) return item;
-    return getLastSameNest(item->next);
-}
-
-PlanItem *planItemDeepCopy(PlanItem *base, bool cloneNext) {
-    if(!base) return NULL;
-
-    PlanItem *clone = malloc(sizeof(PlanItem));
-    clone->len = base->len;
-    clone->capacity = base->capacity;
-    clone->text = malloc(clone->len);
-    clone->done = base->done;
-    clone->collapsed = false;
-    memcpy(clone->text, base->text, clone->len);
-
-    clone->children = NULL;
-    clone->next = NULL;
-
-    clone->children = planItemDeepCopy(base->children, true);
-    if(cloneNext) clone->next = planItemDeepCopy(base->next, true);
-    return clone;
 }
 
 #endif // __REMBER_PLANITEMS_C
