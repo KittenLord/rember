@@ -1,8 +1,7 @@
+#ifndef __REMBER_TERMINAL_C
+#define __REMBER_TERMINAL_C
+
 #include <stdlib.h>
-
-// TODO: fill out win32 lol
-
-// TODO: figure out whether color works the same on windows or not
 
 void goto00() {
     printf("\e[H");
@@ -27,3 +26,5 @@ void saveScreen() {
 void invisibleCursorOn() {
     printf("\e[?25l");
 }
+
+#endif

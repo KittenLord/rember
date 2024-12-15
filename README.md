@@ -21,8 +21,11 @@ q - exit
 Q - exit without saving
 w - save
 
+# Known issues:
+- Can't exit visual and insert mode using Escape key on Windows
+
 # TODO:
-- [ ] Windows support (shouldn't be too hard [clueless])
+- [~] Windows support (shouldn't be too hard [clueless])
 - [ ] Configuration/customization
 - [ ] Actually do something when a line is too long
 - [ ] Recurring tasks

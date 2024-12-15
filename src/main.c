@@ -46,7 +46,7 @@ typedef struct PlanItem PlanItem;
 // Option A: remind every N seconds (time_t)
 // Option B: remind every selected weekday at particular time
 // Option C: remind every selected month at every selected date at particular time
-typedef struct PlanItem {
+struct PlanItem {
     char *text;
     size_t len;
     bool done;
@@ -425,7 +425,7 @@ int main(int argc, char **argv) {
         ctob(input, buf);
         log("SELECTED INDEX: %d\n", selectedIndex);
         log("AMOUNT: %d\n", getPlanItemAmount(root));
-        log("ROOT NEXT: %d\n", root->next);
+        log("ROOT NEXT: %p\n", root->next);
         log("KEY: %s\n", buf);
         log("ITERATION: %d\n", ++iteration);
 

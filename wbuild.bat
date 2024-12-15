@@ -1,2 +1,2 @@
-gcc ./main.c -o ./rember.exe -ggdb
+gcc ./src/main.c -o ./bin/rember.exe -ggdb -Wall -Wextra
 .\rember.exe
