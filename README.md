@@ -42,6 +42,5 @@ w - save
 # TODO:
 - [x] Windows support (shouldn't be too hard [clueless])
 - [ ] Configuration/customization
-- [ ] Actually do something when a line is too long
 - [ ] Recurring tasks
 - [ ] Automatic reminders
