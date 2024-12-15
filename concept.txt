@@ -18,6 +18,8 @@ d - delete task
 Enter - tick/untick task
 Tab - collapse/reveal task
 
+r - probably modify reminder settings
+
 ideas:
 
 possibly multiple tabs, opened on 1 2 3 etc
