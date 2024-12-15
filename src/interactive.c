@@ -119,7 +119,7 @@ void interactive() {
     FILE *logfile = fopen("./log.txt", "w+");
     if(logfile) fclose(logfile); \
 
-    FILE *savefile = fopen("./planner.txt", "r+");
+    FILE *savefile = fopen("./planner.txt", "rb+");
 
     #define log(text, ...) do { \
         logfile = fopen("./log.txt", "a+"); \
@@ -130,7 +130,7 @@ void interactive() {
     } while(0)
 
     bool new = false;
-    if(!savefile) { new = true; savefile = fopen("./planner.txt", "w+"); }
+    if(!savefile) { new = true; savefile = fopen("./planner.txt", "wb+"); }
 
     PlanItem *root;
     if(!new) {
@@ -248,7 +248,7 @@ void interactive() {
                 simulate("vd");
             }
             if(input == 'w') {
-                savefile = fopen("./planner.txt", "w+");
+                savefile = fopen("./planner.txt", "wb+");
                 writePlanItem(root, savefile);
                 fclose(savefile);
             }
@@ -363,7 +363,7 @@ void interactive() {
     }
 
     if(doSave) { 
-        savefile = fopen("./planner.txt", "w+");
+        savefile = fopen("./planner.txt", "wb+");
         writePlanItem(root, savefile);
         fclose(savefile);
     }
