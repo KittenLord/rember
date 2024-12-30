@@ -92,6 +92,9 @@ void freePlanItem(PlanItem *item, bool freeNext) {
 
     File format spec (kinda)
 
+    goal ::= "REMBER"
+             entry
+
     entry ::= (TextLength :: u8)
               (Text :: String[TextLength]) 
               (IsDone :: u8 (Bool))  
@@ -117,6 +120,8 @@ void freePlanItem(PlanItem *item, bool freeNext) {
 
 */
 
+#define REMBER_HEADER "REMBER"
+
 #define NO_ITEM 0x00
 #define NEXT_ITEM 0x01
 #define CHILD_ITEM 0x02
@@ -124,7 +129,8 @@ void freePlanItem(PlanItem *item, bool freeNext) {
 #define TIME_FLAG 0x0A
 
 // this will ABSOLUTELY explode if it encounters bad data btw
-PlanItem *parsePlanItem(char **data) {
+// TODO: rewrite using file API
+PlanItem *__parsePlanItem(char **data) {
     size_t text_len = *((*data)++); // maybe change to 8 bytes?
     if(!text_len) return NULL;
 
@@ -147,18 +153,28 @@ PlanItem *parsePlanItem(char **data) {
         *data += sizeof(RemindTimeInfo);
         this->lastCheckedStaged = this->remindInfo.lastChecked;
     });
-    ifControl(CHILD_ITEM, { this->children = parsePlanItem(data); });
-    ifControl(NEXT_ITEM, { this->next = parsePlanItem(data); });
+    ifControl(CHILD_ITEM, { this->children = __parsePlanItem(data); });
+    ifControl(NEXT_ITEM, { this->next = __parsePlanItem(data); });
 
     assert(control == NO_ITEM);
     return this;
+}
+PlanItem *parsePlanItem(char **data) {
+    if(strlen(*data) < strlen(REMBER_HEADER)) return NULL;
+    char header[256] = {0};
+    memcpy(header, *data, strlen(REMBER_HEADER));
+    *data += strlen(REMBER_HEADER);
+
+    if(strcmp(header, REMBER_HEADER) != 0) return NULL;
+    return __parsePlanItem(data);
 }
 
 // FIXME: for some reason after writing on windows this doesn't work
 // the only idea I currently have is that when writing \n windows
 // automatically writes \r\n instead (cuz I found 0x0D0A in xxd), but
 // regardless, I'll look into this later
-void writePlanItem(PlanItem *item, FILE *file) {
+
+void __writePlanItem(PlanItem *item, FILE *file) {
     // Commit all temporary changes
     item->remindInfo.lastChecked = item->lastCheckedStaged;
 
@@ -174,10 +190,14 @@ void writePlanItem(PlanItem *item, FILE *file) {
     char timeFlag = TIME_FLAG;
 
     if(item->remindInfo.type != RemindNone) { fwrite(&timeFlag, sizeof(char), 1, file); fwrite(&item->remindInfo, sizeof(RemindTimeInfo), 1, file); }
-    if(item->children) { fwrite(&childItem, sizeof(char), 1, file); writePlanItem(item->children, file); }
-    if(item->next) { fwrite(&nextItem, sizeof(char), 1, file); writePlanItem(item->next, file); }
+    if(item->children) { fwrite(&childItem, sizeof(char), 1, file); __writePlanItem(item->children, file); }
+    if(item->next) { fwrite(&nextItem, sizeof(char), 1, file); __writePlanItem(item->next, file); }
     fwrite(&noItem, sizeof(char), 1, file);
     return;
+}
+void writePlanItem(PlanItem *item, FILE *file) {
+    fwrite(REMBER_HEADER, sizeof(char), strlen(REMBER_HEADER), file);
+    __writePlanItem(item, file);
 }
 
 bool isExpired(PlanItem *item, time_t now) {

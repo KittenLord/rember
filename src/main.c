@@ -9,6 +9,8 @@
 
 #define SUB_INTERACTIVE "interactive"
 
+#define CONFIG_DATAPATH "datapath"
+
 #define STREAM_STR 1
 #define STREAM_FILE 2
 typedef struct {
@@ -62,8 +64,31 @@ char *getPathWithHome(char *path) {
 }
 
 // false on failure
-bool ensureDirectoryExists(char *path) {
-    return mkdir(path, 0700) != -1 || errno == 17; // errno 17 : Already exists
+bool ensureExists(char *path) {
+    path = getPathWithHome(path); // hopefully shouldnt be needed
+    size_t length = strlen(path);
+    size_t index = 0;
+
+    char *tpath = calloc(sizeof(char), length + 1);
+
+    while(index < length) {
+        do {
+            tpath[index] = path[index];
+            index++;
+        } while(path[index] != '\0' && path[index] != '/');
+
+        if(path[index] == '/') { // directory
+            if(mkdir(tpath, 0700) == -1 && errno != 17) {} // return false;
+        }
+        else if(path[index] == '\0') { // file
+            if(path[index - 1] == '/') return true; // path ends with / to specify directory
+            FILE *file = fopen(tpath, "r");
+            if(!file) file = fopen(tpath, "w");
+            if(!file) {} // return false;
+            if(file) fclose(file);
+        }
+        else { assert(false); }
+    }
 }
 
 void parseConfig(stream *s, struct AtomicHashmap *hm) {
@@ -95,60 +120,28 @@ void parseConfig(stream *s, struct AtomicHashmap *hm) {
     parseConfig(s, hm); // '\n' or ';' have already been consumed, we can just recursively parse
 }
 
-FILE *getConfig() {
-    char *configPath = getPathWithHome(getenv("XDG_CONFIG_HOME"));
-    bool result = true;
-    bool useDefaultPath = false;
-
-    // if XDG_CONFIG_HOME is not set use default
-    if(!configPath) {
-        useDefaultPath = true;
-        configPath = getenv("HOME");
-        configPath = strcatnew(configPath, "/.config", false);
-        result = ensureDirectoryExists(configPath);
-        if(!result) return NULL;
-    }
-
-    configPath = strcatnew(configPath, "/rember", useDefaultPath);
-    result = ensureDirectoryExists(configPath);
-
-    if(!result) return NULL;
-
-    configPath = strcatnew(configPath, "/config", true);
-    FILE *configFile = fopen(configPath, "r");
-
-    if(!configFile) {
-        configFile = fopen(configPath, "w");
-        if(!configFile) {}
-        else { fclose(configFile); }
-    }
-
-    free(configPath);
-
-    return configFile;
+char *getPathVar(char *variable, char *fallback) {
+    char *value = getenv(variable);
+    if(!value || strlen(value) == 0) return getPathWithHome(fallback);
+    return getPathWithHome(value);
 }
 
 int main(int argc, char **argv) {
+    // so much memory gets leaked nooooo
     struct AtomicHashmap configHM = createHM();
-    FILE *configFile = getConfig();
+    char *dataPath = getPathVar("XDG_DATA_HOME", "~/.local/share/rember/data.rember");
+    setHM_LL(&configHM, "datapath", dataPath);
+    // insertHM_LL(&config, "CONFIG_PATH", "");
+    
+    char *configPath = getPathVar("XDG_CONFIG_HOME", "~/.config/rember/config");
+    bool exists = ensureExists(configPath);
+
+    FILE *configFile = fopen(configPath, "r");
 
     // TODO: later provide ability to pass config via a string arg
     stream configStream = stream_file(configFile);
 
     parseConfig(&configStream, &configHM);
-
-    // insertHM_LL(&config, "CONFIG_PATH", "");
-
-    // size_t length;
-    // char *testKey = getHM(&configHM, "test", 4, &length);
-    // if(!testKey) {
-    //     printf("no such key\n");
-    // }
-    // else {
-    //     char *t = calloc(sizeof(char), length + 1);
-    //     memcpy(t, testKey, length);
-    //     printf("%s\n", t);
-    // }
 
     char *subcommand = SUB_INTERACTIVE;
 
@@ -156,7 +149,11 @@ int main(int argc, char **argv) {
         printf("%s\n", argv[i]);
     }
 
+    // config is to never be changed after this, so we can skip copying this pointer to a local buffer since the pointer will be persistent
+    dataPath = getHM(&configHM, CONFIG_DATAPATH, strlen(CONFIG_DATAPATH), NULL);
+    ensureExists(dataPath);
+
     if(!strcmp(subcommand, SUB_INTERACTIVE)) {
-        interactive();
+        interactive(dataPath);
     }
 }
