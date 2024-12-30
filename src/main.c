@@ -44,12 +44,14 @@ char readStream(stream *s) {
         if(s->index >= s->length) return EOF;
         return s->ptr[s->index++];
     }
+
+    return EOF;
 }
 
 char *strcatnew(char *a, char *b, bool freeA) {
     size_t alen = strlen(a);
     size_t blen = strlen(b);
-    char *result = calloc(sizeof(char), alen + blen + 1); // null terminator
+    char *result = calloc(alen + blen + 1, sizeof(char)); // null terminator
     memcpy(result, a, alen);
     memcpy(result + alen, b, blen);
     if(freeA) free(a);
@@ -69,7 +71,7 @@ bool ensureExists(char *path) {
     size_t length = strlen(path);
     size_t index = 0;
 
-    char *tpath = calloc(sizeof(char), length + 1);
+    char *tpath = calloc(length + 1, sizeof(char));
 
     while(index < length) {
         do {
@@ -89,6 +91,8 @@ bool ensureExists(char *path) {
         }
         else { assert(false); }
     }
+    
+    return true;
 }
 
 void parseConfig(stream *s, struct AtomicHashmap *hm) {
@@ -156,4 +160,6 @@ int main(int argc, char **argv) {
     if(!strcmp(subcommand, SUB_INTERACTIVE)) {
         interactive(dataPath);
     }
+
+    return 0;
 }

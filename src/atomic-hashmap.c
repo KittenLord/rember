@@ -156,7 +156,7 @@ void setHM(struct AtomicHashmap *hm, uint8_t *key, size_t keyLen, uint8_t *data,
         struct AtomicHashmapNode *node = *insertNode;
         if(__nodeMatchesKey(node, key, keyLen)) {
             free(node->data);
-            node->data = calloc(sizeof(uint8_t), dataLen + 1);
+            node->data = calloc(dataLen + 1, sizeof(uint8_t));
             node->dataLen = dataLen;
             memcpy(node->data, data, dataLen);
             return;
@@ -171,9 +171,9 @@ void setHM(struct AtomicHashmap *hm, uint8_t *key, size_t keyLen, uint8_t *data,
 insert:
     struct AtomicHashmapNode *node = malloc(sizeof(struct AtomicHashmapNode));
     *node = (struct AtomicHashmapNode){
-        .key = calloc(sizeof(uint8_t), keyLen + 1),
+        .key = calloc(keyLen + 1, sizeof(uint8_t)),
         .keyLen = keyLen,
-        .data = calloc(sizeof(uint8_t), dataLen + 1),
+        .data = calloc(dataLen + 1, sizeof(uint8_t)),
         .dataLen = dataLen,
         .next = NULL
     };
