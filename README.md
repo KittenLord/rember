@@ -40,7 +40,10 @@ w - save
 - Can't exit visual and insert mode using Escape key on Windows
 
 # TODO:
-- [x] Windows support (shouldn't be too hard [clueless])
-- [ ] Configuration/customization
+- [x] General Windows support (shouldn't be too hard [clueless])
+- [x] Configuration/customization
+- [ ] Implement moving tasks up and down (J and K)
+- [ ] Multiple "workspaces"
+- [ ] Make config paths work on Windows
 - [ ] Recurring tasks
 - [ ] Automatic reminders
