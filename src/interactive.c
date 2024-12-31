@@ -11,7 +11,7 @@
 #include <signal.h>
 #include <assert.h>
 
-#if defined(__linux__) || defined(TARGET_OS_MAC)
+#ifdef defined(__linux__) || defined(__APPLE__)
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
@@ -27,13 +27,13 @@
 #include "ui/ui.c"
 #include "ui/remind-every.c"
 
-#if defined(__linux__) || defined(TARGET_OS_MAC)
+#if defined(__linux__) || defined(__APPLE__)
 #define KEY_BACKSPACE 0x7F
 #elif defined(_WIN32)
 #define KEY_BACKSPACE 0x08
 #endif
 
-#if defined(__linux__) || defined(TARGET_OS_MAC)
+#if defined(__linux__) || defined(__APPLE__)
 #define KEY_ENTER 0x0A
 #elif defined(_WIN32)
 #define KEY_ENTER 0x0D
@@ -42,7 +42,7 @@
 #define KEY_TAB 0x09
 
 // a very bad solution, but idk how to fix this atm
-#if defined(__linux__) || defined(TARGET_OS_MAC)
+#if defined(__linux__) || defined(__APPLE__)
 #define KEY_ESCAPE '\e'
 #elif defined(_WIN32)
 #define KEY_ESCAPE '`'
@@ -130,7 +130,7 @@ void render() {
 
 void interactive(char *dataPath) {
 
-#if defined(__linux__) || defined(TARGET_OS_MAC)
+#if defined(__linux__) || defined(__APPLE__)
     struct termios term, restore;
     tcgetattr(STDIN_FILENO, &term);
     tcgetattr(STDIN_FILENO, &restore);
@@ -419,7 +419,7 @@ void interactive(char *dataPath) {
 
     restoreScreen();
 
-#if defined(__linux__) || defined(TARGET_OS_MAC)
+#if defined(__linux__) || defined(__APPLE__)
     tcsetattr(STDIN_FILENO, TCSANOW, &restore);
 #elif defined(_WIN32)
     SetConsoleMode(console, term);
