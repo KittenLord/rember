@@ -11,11 +11,11 @@
 #include <signal.h>
 #include <assert.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(TARGET_OS_MAC)
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-#elif _WIN32
+#elif defined(_WIN32)
 #include <windows.h>
 #include <fcntl.h>
 #endif
@@ -27,24 +27,24 @@
 #include "ui/ui.c"
 #include "ui/remind-every.c"
 
-#ifdef __linux__
+#if defined(__linux__) || defined(TARGET_OS_MAC)
 #define KEY_BACKSPACE 0x7F
-#elif _WIN32
+#elif defined(_WIN32)
 #define KEY_BACKSPACE 0x08
 #endif
 
-#ifdef __linux__
+#if defined(__linux__) || defined(TARGET_OS_MAC)
 #define KEY_ENTER 0x0A
-#elif _WIN32
+#elif defined(_WIN32)
 #define KEY_ENTER 0x0D
 #endif
 
 #define KEY_TAB 0x09
 
 // a very bad solution, but idk how to fix this atm
-#ifdef __linux__
+#if defined(__linux__) || defined(TARGET_OS_MAC)
 #define KEY_ESCAPE '\e'
-#elif _WIN32
+#elif defined(_WIN32)
 #define KEY_ESCAPE '`'
 #endif
 
@@ -130,7 +130,7 @@ void render() {
 
 void interactive(char *dataPath) {
 
-#ifdef __linux__
+#if defined(__linux__) || defined(TARGET_OS_MAC)
     struct termios term, restore;
     tcgetattr(STDIN_FILENO, &term);
     tcgetattr(STDIN_FILENO, &restore);
@@ -140,7 +140,7 @@ void interactive(char *dataPath) {
     struct sigaction sa;
     sa.sa_handler = render;
     sigaction(SIGWINCH, &sa, NULL);
-#elif _WIN32
+#elif defined(_WIN32)
     DWORD term, restore;
     HANDLE console = GetStdHandle(STD_INPUT_HANDLE);
 
@@ -419,9 +419,9 @@ void interactive(char *dataPath) {
 
     restoreScreen();
 
-#ifdef __linux
+#if defined(__linux__) || defined(TARGET_OS_MAC)
     tcsetattr(STDIN_FILENO, TCSANOW, &restore);
-#elif _WIN32
+#elif defined(_WIN32)
     SetConsoleMode(console, term);
 #endif
 }
