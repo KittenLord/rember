@@ -11,7 +11,7 @@
 #include <signal.h>
 #include <assert.h>
 
-#ifdef defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__)
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
