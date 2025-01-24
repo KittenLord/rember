@@ -393,7 +393,7 @@ void interactive(char *dataPath) {
                 copyBuffer = removed;
                 s.mode = NORMAL_MODE;
 
-                if(previous) {
+                if(previous && previous != s.root) {
                     selected = previous;
                     s.selectedIndex = getPlanItemIndex(s.root, previous);
                 }
